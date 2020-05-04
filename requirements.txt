@@ -1,4 +1,7 @@
-torch
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+torch >=1.2.0
 transformers
-tqdm
+tqdm >=4.36.1
 numpy

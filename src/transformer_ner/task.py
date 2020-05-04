@@ -16,7 +16,9 @@ from transformers import (AdamW, get_linear_schedule_with_warmup,
                           XLNetConfig, XLNetTokenizer,
                           RobertaConfig, RobertaTokenizer,
                           AlbertConfig, AlbertTokenizer,
-                          DistilBertConfig, DistilBertTokenizer)
+                          DistilBertConfig, DistilBertTokenizer,
+                          BartConfig, BartTokenizer,
+                          ElectraConfig, ElectraTokenizer)
 import torch
 from torch.nn import functional as F
 from torch.nn import CrossEntropyLoss
@@ -27,10 +29,12 @@ import os
 from tqdm import tqdm, trange
 from common_utils.common_io import json_load, output_bio, json_dump
 
-from transformer_ner.model import BertNerModel, RobertaNerModel, XLNetNerModel, AlbertNerModel, DistilBertNerModel, BertLikeNerModel
+from transformer_ner.model import (BertNerModel, RobertaNerModel, XLNetNerModel, AlbertNerModel,
+                                   DistilBertNerModel, BertLikeNerModel, Transformer_CRF, BartNerModel,
+                                   ElectraNerModel)
 from transformer_ner.data_utils import (TransformerNerDataProcessor, transformer_convert_data_to_features,
                                         ner_data_loader, batch_to_model_inputs,
-                                        convert_features_to_tensors, NEXT_GUARD)
+                                        convert_features_to_tensors, NEXT_GUARD, NEXT_TOKEN)
 
 
 MODEL_CLASSES = {
@@ -38,41 +42,64 @@ MODEL_CLASSES = {
     'xlnet': (XLNetConfig, XLNetNerModel, XLNetTokenizer),
     'roberta': (RobertaConfig, RobertaNerModel, RobertaTokenizer),
     'albert': (AlbertConfig, AlbertNerModel, AlbertTokenizer),
-    'distilbert': (DistilBertConfig, DistilBertNerModel, DistilBertTokenizer)
+    'distilbert': (DistilBertConfig, DistilBertNerModel, DistilBertTokenizer),
+    'bart': (BartConfig, BartNerModel, BartTokenizer),
+    'electra': (ElectraConfig, ElectraNerModel, ElectraTokenizer)
 }
 
 
-def load_model(model_dir):
-    model_dir = Path(model_dir)
+def load_model(args, new_model_dir=None):
+    if not new_model_dir:
+        model_dir = Path(args.new_model_dir)
+    else:
+        model_dir = Path(new_model_dir)
     all_model_files = model_dir.glob("*.bin")
     all_model_files = list(filter(lambda x: 'checkpoint_' in x.as_posix(), all_model_files))
     sorted_file = sorted(all_model_files, key=lambda x: int(x.stem.split("_")[-1]))
-    return torch.load(sorted_file[-1], map_location=torch.device('cpu'))
+    # #load direct from model files
+    args.logger.info("load checkpoint from {}".format(sorted_file[-1]))
+    ckpt = torch.load(sorted_file[-1], map_location=torch.device('cpu'))
+    # #load model as state_dict
+    model = MODEL_CLASSES[args.model_type][1]
+    model = model(config=args.config)
+    model.load_state_dict(state_dict=ckpt)
+    return model
 
 
 def save_only_transformer_core(args, model):
-    if args.model_type == "bert":
+    model_type = args.model_type
+    if model_type == "bert":
         model_core = model.bert
-    elif args.model_type == "roberta":
+    elif model_type == "roberta":
         model_core = model.roberta
-    elif args.model_type == "xlnet":
+    elif model_type == "xlnet":
         model_core = model.transformer
-    elif args.model_type == "distilbert":
+    elif model_type == "distilbert":
         model_core = model.distilbert
-    elif args.model_type == "albert":
+    elif model_type == "albert":
         model_core = model.albert
+    elif model_type == "bart":
+        model_core = model.bart
+    elif model_type == "electra":
+        model_core = model.electra
     else:
         args.logger.warning("{} is current not supported for saving model core; we will skip saving to prevent error.".format(args.model_type))
         return
     model_core.save_pretrained(args.new_model_dir)
 
 
-def save_model(model, model_dir, index, latest=3):
-    model_to_save = model.module if hasattr(model, 'module') else model
+def save_model(args, model, model_dir, index, latest=3):
     new_model_file = model_dir / "checkpoint_{}.bin".format(index)
-    torch.save(model_to_save, new_model_file)
-    # only keep 'latest' # of checkpoints
-    all_model_files = list(model_dir.glob("*.bin"))
+    args.tokenizer.save_pretrained(args.new_model_dir)
+    args.config.save_pretrained(args.new_model_dir)
+    model_to_save = model.module if hasattr(model, 'module') else model
+    # #direct save model
+    # torch.save(model_to_save, new_model_file)
+    # #save model as state dict
+    args.logger.info("save checkpoint to {}".format(new_model_file))
+    torch.save(model_to_save.state_dict(), new_model_file)
+    # #only keep 'latest' # of checkpoints
+    all_model_files = list(model_dir.glob("checkpoint_*.bin"))
     if len(all_model_files) > latest:
         # sorted_files = sorted(all_model_files, key=lambda x: os.path.getmtime(x))  # sorted by the last modified time
         sorted_file = sorted(all_model_files, key=lambda x: int(x.stem.split("_")[-1]))  # sorted by the checkpoint step
@@ -83,13 +110,11 @@ def save_model(model, model_dir, index, latest=3):
 def check_partial_token(token_as_id, tokenizer):
     token = tokenizer.convert_ids_to_tokens(int(token_as_id))
     flag = False
-    if (isinstance(tokenizer, BertTokenizer) or isinstance(tokenizer, DistilBertTokenizer)) and token.startswith('##'):
+    if (isinstance(tokenizer, BertTokenizer) or isinstance(tokenizer, DistilBertTokenizer) or isinstance(tokenizer, ElectraTokenizer)) and token.startswith('##'):
         flag = True
-    elif isinstance(tokenizer, RobertaTokenizer) and not token.startswith('Ġ'):
+    elif (isinstance(tokenizer, RobertaTokenizer) or isinstance(tokenizer, BartTokenizer)) and not token.startswith('Ġ'):
         flag = True
-    elif isinstance(tokenizer, XLNetTokenizer) and not token.startswith('▁'):
-        flag = True
-    elif isinstance(tokenizer, AlbertTokenizer) and not token.startswith("▁"):
+    elif (isinstance(tokenizer, AlbertTokenizer) or isinstance(tokenizer, XLNetTokenizer)) and not token.startswith('▁'):
         flag = True
     return flag
 
@@ -141,7 +166,7 @@ def train(args, model, train_features, dev_features):
     args.logger.info("  Instantaneous batch size per GPU = {}".format(args.train_batch_size))
     args.logger.info("  Gradient Accumulation steps = {}".format(args.gradient_accumulation_steps))
     args.logger.info("  Total optimization steps = {}".format(t_total))
-    args.logger.info("  Training steps (number of steps between two evaluation on dev) = {}".format(args.train_steps))
+    args.logger.info("  Training steps (number of steps between two evaluation on dev) = {}".format(args.train_steps*args.gradient_accumulation_steps))
     args.logger.info("******************************")
 
     # create directory to save model
@@ -166,7 +191,7 @@ def train(args, model, train_features, dev_features):
         for step, batch in enumerate(batch_iter):
             model.train()
             batch = tuple(b.to(args.device) for b in batch)
-            train_inputs = batch_to_model_inputs(batch)
+            train_inputs = batch_to_model_inputs(batch, args.model_type)
             _, _, loss = model(**train_inputs)
 
             if args.gradient_accumulation_steps > 1:
@@ -192,24 +217,25 @@ def train(args, model, train_features, dev_features):
                 global_step += 1
 
             # using training step
-            if args.train_steps > 0 and (global_step + 1) % args.train_steps == 0:
+            if args.train_steps > 0 and (global_step + 1) % args.train_steps == 0 and epoch > 0:
+                # the current implementation will skip the all evaluations in the first epoch
                 best_score, eval_loss = evaluate(args, model, new_model_dir, dev_features, epoch, global_step, best_score)
                 args.logger.info("""
                 Global step: {}; 
                 Epoch: {}; 
                 average_train_loss: {:.4f}; 
                 eval_loss: {:.4f}; 
-                current best score: {:.4f}""".format(global_step,epoch,round(tr_loss / global_step, 4), eval_loss,best_score))
+                current best score: {:.4f}""".format(global_step, epoch+1, round(tr_loss / global_step, 4), eval_loss, best_score))
 
         # default model select method using strict F1-score with beta=1; evaluate model after each epoch on dev
-        if args.train_steps <= 0:
+        if args.train_steps <= 0 or epoch == 0:
             best_score, eval_loss = evaluate(args, model, new_model_dir, dev_features, epoch, global_step, best_score)
             args.logger.info("""
                 Global step: {}; 
                 Epoch: {}; 
                 average_train_loss: {:.4f}; 
                 eval_loss: {:.4f}; 
-                current best score: {:.4f}""".format(global_step, epoch, round(tr_loss / global_step, 4), eval_loss, best_score))
+                current best score: {:.4f}""".format(global_step, epoch+1, round(tr_loss / global_step, 4), eval_loss, best_score))
 
         # early stop check
         if epcoh_best_score < best_score:
@@ -246,12 +272,13 @@ def _eval(args, model, features):
         guards = batch[4].numpy()
 
         batch = tuple(b.to(args.device) for b in batch)
-        eval_inputs = batch_to_model_inputs(batch)
+        eval_inputs = batch_to_model_inputs(batch, args.model_type)
 
         with torch.no_grad():
             raw_logits, _, loss = model(**eval_inputs)
             # get softmax output of the raw logits (keep dimensions)
-            raw_logits = torch.argmax(F.log_softmax(raw_logits, dim=2), dim=2)
+            if not args.use_crf:
+                raw_logits = torch.argmax(F.log_softmax(raw_logits, dim=2), dim=2)
             raw_logits = raw_logits.detach().cpu().numpy()
             # update evaluate loss
             eval_loss += loss.item()
@@ -262,15 +289,18 @@ def _eval(args, model, features):
                 input_tokens: {}
                 mask: {}
                 label: {}
-                output logits:{}
+                logits: {}
             """.format(original_tkid.shape, original_mask.shape, original_labels.shape, raw_logits.shape)
 
         # tk=token, mk=mask, lb=label, lgt=logits
         for mks, lbs, lgts, gds in zip(original_mask, original_labels, raw_logits, guards):
             connect_sent_flag = False
             for mk, lb, lgt, gd in zip(mks, lbs, lgts, gds):
-                if mk == 0:  # after hit first mask, we can stop for the current sentence since all rest will be pad
-                    break
+                if mk == 0:  # after hit first mask, we can stop for the current sentence since all rest will be pad (not for xlnet)
+                    if args.model_type == "xlnet":
+                        continue
+                    else:
+                        break
                 if gd == 0 or prev_gd == gd:
                     continue
                 if gd == NEXT_GUARD:
@@ -302,18 +332,51 @@ def evaluate(args, model, new_model_dir, features, epoch, global_step, best_scor
     cur_score = eval_metrix['overall'][score_lvl][score_method]
     args.eval_tool.reset()
 
-    if best_score < cur_score:
+    # select model based on best score
+    # if best_score < cur_score:
+    if cur_score - best_score > 0.00005:
         args.logger.info('''
         Global step: {}; 
         Epoch: {}; 
         previous best score: {:.4f}; 
         new best score: {:.4f}; 
         full evaluation metrix: {}
-        '''.format(global_step, epoch, best_score, cur_score, eval_metrix))
+        '''.format(global_step, epoch+1, best_score, cur_score, eval_metrix))
         best_score = cur_score
-        save_model(model, new_model_dir, global_step, latest=args.max_num_checkpoints)
+        save_model(args, model, new_model_dir, global_step, latest=args.max_num_checkpoints)
+
+        # save model transformer core
+        if args.save_model_core:
+            save_only_transformer_core(args, model)
 
     return best_score, eval_loss
+
+
+def __fix_bio(bios):
+    fix_bios = []
+    prev = None
+    for i, bio in enumerate(bios):
+        if i == 0:
+            if bio.startswith("I-"):
+                prev = "B-" + bio.split("-")[-1]
+            else:
+                prev = bio
+        else:
+            if bio.startswith("I-"):
+                t, s = bio.split("-")
+                if prev == "O":
+                    prev = "B-" + s
+                else:
+                    pt, ps = prev.split("-")
+                    if ps != s:
+                        prev = "B-" + s
+                    else:
+                        prev = bio
+            else:
+                prev = bio
+        fix_bios.append(prev)
+
+    return fix_bios
 
 
 def predict(args, model, features):
@@ -323,7 +386,10 @@ def predict(args, model, features):
     system_labels = {label for idx, label in args.idx2label.items() if idx < args.label2idx['O']}
     fixed_preds = []
     for each in y_pred:
-        fixed_preds.append(list(map(lambda x: 'O' if x in system_labels else x, each)))
+        fixed_pred = list(map(lambda x: 'O' if x in system_labels else x, each))
+        fixed_pred = __fix_bio(fixed_pred)  # fix case: O, i-x, i-x, O to O, b-x, i-x, O
+        fixed_preds.append(fixed_pred)
+
     return fixed_preds
 
 
@@ -335,7 +401,7 @@ def _output_bio(args, tests, preds):
         assert len(tokens) == len(predicted_labels), "Not same length sentence\nExpect: {} {}\nBut: {} {}".format(len(tokens), tokens, len(predicted_labels), predicted_labels)
         offsets = example.offsets
         if offsets:
-            new_sent = [(tk, ofs[0], ofs[1], lb) for tk, ofs, lb in zip(tokens, offsets, predicted_labels)]
+            new_sent = [(tk, ofs[0], ofs[1], ofs[2], ofs[3], lb) for tk, ofs, lb in zip(tokens, offsets, predicted_labels)]
         else:
             new_sent = [(tk, lb) for tk, lb in zip(tokens, predicted_labels)]
         new_sents.append(new_sent)
@@ -359,8 +425,8 @@ def set_up_eval_tool(args):
 def run_task(args):
     set_seed(args.seed)
 
-    if os.path.exists(args.new_model_dir) and os.listdir(args.new_model_dir) and args.do_train and not args.overwrite_output_dir:
-        raise ValueError('new model directory: {} exists. Use --overwrite_output_dir to overwrite the previous model or create another directory for the new model'.format(args.new_model_dir))
+    if os.path.exists(args.new_model_dir) and os.listdir(args.new_model_dir) and args.do_train and not args.overwrite_model_dir:
+        raise ValueError('new model directory: {} exists. Use --overwrite_model_dir to overwrite the previous model or create another directory for the new model'.format(args.new_model_dir))
 
     # init data processor
     ner_data_processor = TransformerNerDataProcessor()
@@ -385,12 +451,27 @@ def run_task(args):
 
     # training
     if args.do_train:
-        config = model_config.from_pretrained(args.config_name, num_labels=num_labels)
-        model = model_model.from_pretrained(args.pretrained_model, from_tf=bool('.ckpt' in args.pretrained_model), config=config)
         tokenizer = model_tokenizer.from_pretrained(args.tokenizer_name, do_lower_case=args.do_lower_case)
+        tokenizer.add_tokens([NEXT_TOKEN])
+        config = model_config.from_pretrained(args.config_name, num_labels=num_labels)
+        tf_ckpts = list(Path(args.pretrained_model).glob("*.ckpt.index"))
+        from_tf_flag = True if tf_ckpts else False
+        if args.use_crf:
+            crf_layer = Transformer_CRF(num_labels=num_labels, start_label_id=label2idx['CLS'])
+            model = model_model.from_pretrained(args.pretrained_model,
+                                                from_tf=from_tf_flag,
+                                                config=config,
+                                                crf=crf_layer)
+            model.active_using_crf()
+        else:
+            model = model_model.from_pretrained(args.pretrained_model,
+                                                from_tf=from_tf_flag,
+                                                config=config)
 
-        # add an control token for combine sentence if it is too long to fit max_seq_len
+        # #add an control token for combine sentence if it is too long to fit max_seq_len
+        model.resize_token_embeddings(len(tokenizer))
         args.tokenizer = tokenizer
+        args.config = model.config
         model.to(args.device)
 
         train_examples = ner_data_processor.get_train_examples()
@@ -411,25 +492,22 @@ def run_task(args):
         args.eval_tool = set_up_eval_tool(args)
         # start training
         train(args, model, train_features, dev_features)
-        # save model transformer core
-        if args.save_model_core:
-            save_only_transformer_core(args, model)
         # save config and tokenizer with new model
-        tokenizer.save_pretrained(args.new_model_dir)
-        config.save_pretrained(args.new_model_dir)
+        args.tokenizer.save_pretrained(args.new_model_dir)
+        args.config.save_pretrained(args.new_model_dir)
 
     # predict - test.txt file prediction (if you need predict many files, use 'run_transformer_batch_prediction')
     if args.do_predict:
-        model = load_model(args.new_model_dir)
-        tokenizer = model_tokenizer.from_pretrained(args.new_model_dir, do_lower_case=args.do_lower_case)
-        args.tokenizer = tokenizer
+        args.config = model_config.from_pretrained(args.new_model_dir, num_labels=num_labels)
+        args.tokenizer = model_tokenizer.from_pretrained(args.new_model_dir, do_lower_case=args.do_lower_case)
+        model = load_model(args)
         model.to(args.device)
 
         test_example = ner_data_processor.get_test_examples()
         test_features = transformer_convert_data_to_features(args,
                                                              input_examples=test_example,
                                                              label2idx=label2idx,
-                                                             tokenizer=tokenizer,
+                                                             tokenizer=args.tokenizer,
                                                              max_seq_len=args.max_seq_length)
 
         predictions = predict(args, model, test_features)
@@ -452,22 +530,25 @@ def test():
             # self.pretrained_model = 'distilbert-base-uncased'
             # self.model_type = 'xlnet'
             # self.pretrained_model = 'xlnet-base-cased'
+            # self.model_type = 'bart'
+            # self.pretrained_model = 'bart-large'
+            # self.model_type = 'electra'
+            # self.pretrained_model = 'google/electra-small-discriminator'
             self.config_name = self.pretrained_model
             self.tokenizer_name = self.pretrained_model
-            self.do_lower_case = True
-            # self.data_dir = '/Users/alexgre/workspace/data/NER_data/i2b2_2010'
-            self.data_dir = '/Users/alexgre/workspace/data/NER_data/2018n2c2/train_dev_drug'
-            # self.data_dir = '/Users/alexgre/workspace/py3/pytorch_nlp/pytorch_UFHOBI_NER/test_data/conll-2003'
-            self.data_has_offset_information = True
+            self.do_lower_case = False
+            self.data_dir = '/Users/alexgre/workspace/py3/pytorch_nlp/pytorch_UFHOBI_NER/test_data/conll-2003'
+            self.data_has_offset_information = False
+            self.use_crf = True
             self.new_model_dir = Path(__file__).resolve().parent.parent.parent / 'new_ner_model'
             self.predict_output_file = Path(__file__).resolve().parent.parent.parent / "new_ner_model/pred.txt"
-            self.overwrite_output_dir = True
-            self.max_seq_length = 64
+            self.overwrite_model_dir = True
+            self.max_seq_length = 128
             self.do_train = True
-            self.do_predict = False
+            self.do_predict = True
             self.model_selection_scoring = "strict-f_score-1"
-            self.train_batch_size = 4
-            self.eval_batch_size = 4
+            self.train_batch_size = 2
+            self.eval_batch_size = 2
             self.learning_rate = 0.00001
             self.seed = 13
             self.logger = TransformerNERLogger(logger_level="i", logger_file=Path(__file__).resolve().parent.parent.parent/"new_ner_model/log.txt").get_logger()
@@ -487,10 +568,9 @@ def test():
             self.local_rank = -1
             self.device = "cpu"
             self.train_steps = -1
-            self.progress_bar = False
-            self.early_stop = -1
             self.progress_bar = True
-            self.save_model_core = True
+            self.early_stop = -1
+            self.save_model_core = False
 
     args = Args()
     run_task(args)

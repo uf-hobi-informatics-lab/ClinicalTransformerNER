@@ -1,0 +1,61 @@
+Total 1108 entities
+    location_city : 23
+    name : 308
+    age : 91
+    location_zip : 10
+    location_street : 10
+    date : 454
+    location_institute : 130
+    contact_phone : 11
+    id : 71
+
+Accuracy : 0.994012234928
+
+
+Strict score -----
+precision : 0.974947807933 , recall : 0.842960288809 , f1 : 0.904162633107
+find : 958 , true : 934 , false : 24
+
+Relax score -----
+precision : 0.996868475992 , recall : 0.861913357401 , f1 : 0.924491771539
+find : 958 , true : 955 , false : 3
+
+strict score by cate -----
+Cate : location_city, precision : 0.944444444444 , recall : 0.739130434783 , f1 : 0.829268292683
+find : 18 , true : 17 , false : 1
+Cate : name, precision : 0.989830508475 , recall : 0.948051948052 , f1 : 0.968490878939
+find : 295 , true : 292 , false : 3
+Cate : age, precision : 1.0 , recall : 0.857142857143 , f1 : 0.923076923077
+find : 78 , true : 78 , false : 0
+Cate : location_zip, precision : 1.0 , recall : 1.0 , f1 : 1.0
+find : 10 , true : 10 , false : 0
+Cate : location_street, precision : 0.888888888889 , recall : 0.8 , f1 : 0.842105263158
+find : 9 , true : 8 , false : 1
+Cate : date, precision : 0.983568075117 , recall : 0.922907488987 , f1 : 0.952272727273
+find : 426 , true : 419 , false : 7
+Cate : location_institute, precision : 0.892857142857 , recall : 0.384615384615 , f1 : 0.537634408602
+find : 56 , true : 50 , false : 6
+Cate : contact_phone, precision : 1.0 , recall : 0.818181818182 , f1 : 0.9
+find : 9 , true : 9 , false : 0
+Cate : id, precision : 0.894736842105 , recall : 0.718309859155 , f1 : 0.796875
+find : 57 , true : 51 , false : 6
+
+relax score by cate -----
+Cate : location_city, precision : 1.0 , recall : 0.782608695652 , f1 : 0.878048780488
+find : 18 , true : 18 , false : 0
+Cate : name, precision : 0.993220338983 , recall : 0.951298701299 , f1 : 0.971807628524
+find : 295 , true : 293 , false : 2
+Cate : age, precision : 1.0 , recall : 0.857142857143 , f1 : 0.923076923077
+find : 78 , true : 78 , false : 0
+Cate : location_zip, precision : 1.0 , recall : 1.0 , f1 : 1.0
+find : 10 , true : 10 , false : 0
+Cate : location_street, precision : 1.0 , recall : 0.9 , f1 : 0.947368421053
+find : 9 , true : 9 , false : 0
+Cate : date, precision : 0.99765258216 , recall : 0.936123348018 , f1 : 0.965909090909
+find : 426 , true : 425 , false : 1
+Cate : location_institute, precision : 1.0 , recall : 0.430769230769 , f1 : 0.602150537634
+find : 56 , true : 56 , false : 0
+Cate : contact_phone, precision : 1.0 , recall : 0.818181818182 , f1 : 0.9
+find : 9 , true : 9 , false : 0
+Cate : id, precision : 1.0 , recall : 0.802816901408 , f1 : 0.890625
+find : 57 , true : 57 , false : 0

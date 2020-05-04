@@ -1,0 +1,4 @@
+model_type: bert
+base_model: bert-base-uncased
+config: bert-base-uncased
+tokenizer: bert-base-uncased

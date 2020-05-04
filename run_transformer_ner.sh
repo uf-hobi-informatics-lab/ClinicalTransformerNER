@@ -11,9 +11,9 @@ We did not include examples using fp16 training mode but you can train model wit
 We currently do not support distraibuted multi-GPU training since fine-tuning task is not heavy on most clinical NER datasets.
 '
 
+########################### train and predict ###########################
 # tell system which GPU to use
 export CUDA_VISIBLE_DEVICES=0
-
 
 ########################### train and predict ###########################
 #bert
@@ -39,9 +39,8 @@ python src/run_transformer_ner.py \
       --seed 13 \
       --warmup_ratio 0.1 \
       --max_num_checkpoints 3 \
-      --log_file ./log.txt \
-      --early_stop 3
-
+		  --log_file ./log.txt \
+		  --early_stop 3
 
 ########################### only prediction ###########################
 # bert
@@ -56,6 +55,5 @@ python src/run_transformer_ner.py \
       --max_seq_length 256 \
       --do_predict \
       --model_selection_scoring strict-f_score-1 \
-      --log_file ./log.txt \
-      --eval_batch_size 8
+      --eval_batch_size 8 \
 

@@ -30,7 +30,7 @@ def main():
                         help="save the transformer core of the model which allows model to be used as base model for further pretraining")
     parser.add_argument("--predict_output_file", type=str, default=None,
                         help="predicted results output file.")
-    parser.add_argument('--overwrite_output_dir', action='store_true',
+    parser.add_argument('--overwrite_model_dir', action='store_true',
                         help="Overwrite the content of the new model directory")
     parser.add_argument("--seed", default=3, type=int,
                         help='random seed')
@@ -42,6 +42,8 @@ def main():
                         help='The scoring methos used to select model on dev dataset only support strict-f_score-n, relax-f_score-n (n is 0.5, 1, or 2)')
     parser.add_argument("--do_predict", action='store_true',
                         help="Whether to run prediction on the test set.")
+    parser.add_argument("--use_crf", action='store_true',
+                        help="Whether to use crf layer as classifier.")
     parser.add_argument("--do_lower_case", action='store_true',
                         help="Set this flag if you are using an uncased model.")
     parser.add_argument("--train_batch_size", default=8, type=int,
@@ -83,7 +85,7 @@ def main():
     parser.add_argument("--fp16_opt_level", type=str, default="O1",
                         help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
                              "See details at https://nvidia.github.io/apex/amp.html")
-    parser.add_argument("--local_rank", type=int, default=-1, help="local_rank for distributed training on gpus")
+    # parser.add_argument("--local_rank", type=int, default=-1, help="local_rank for distributed training on gpus")
     # parser.add_argument('--server_ip', type=str, default='', help="Can be used for distant debugging.")
     # parser.add_argument('--server_port', type=str, default='', help="Can be used for distant debugging.")
 
