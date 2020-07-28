@@ -68,7 +68,7 @@ python src/run_transformer_ner.py \
 ```
 
 ## Organization
-- Department of Health Outcomes and Biomedical Informatics, University of Florida
+- Department of Health Outcomes and Biomedical Informatics, College of Medicine, University of Florida
 
 ## authors
 - Xi Yang
@@ -76,8 +76,7 @@ python src/run_transformer_ner.py \
 - Yonghui Wu
 
 ## contact
-- raise issue in our repo
-- alexgre@ufl.edu
+raise issue in our repo
 
 ## reference
 please cite our paper:
@@ -88,3 +87,4 @@ please cite our paper:
 - https://transformer-models.s3.amazonaws.com/mimiciii_bert_10e_128b.zip
 - https://transformer-models.s3.amazonaws.com/mimiciii_electra_5e_128b.zip
 - https://transformer-models.s3.amazonaws.com/mimiciii_roberta_10e_128b.zip
+
