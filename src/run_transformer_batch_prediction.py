@@ -18,6 +18,10 @@ from transformer_ner.transfomer_log import TransformerNERLogger
 from common_utils.common_log import LOG_LVLs
 from common_utils.output_format_converter import main as format_converter
 
+import transformers
+version = transformers.__version__
+assert version > '2.10.0', 'we now only support transformers version >=2.11.0, but your version is {}'.format(version)
+
 
 def main(args):
     label2idx = json_load(os.path.join(args.pretrained_model, "label2idx.json"))

@@ -7,6 +7,10 @@ from transformer_ner.task import run_task
 from transformer_ner.transfomer_log import TransformerNERLogger
 from traceback import format_exc
 
+import transformers
+version = transformers.__version__
+assert version > '2.10.0', 'we now only support transformers version >=2.11.0, but your version is {}'.format(version)
+
 
 def main():
     parser = argparse.ArgumentParser()
