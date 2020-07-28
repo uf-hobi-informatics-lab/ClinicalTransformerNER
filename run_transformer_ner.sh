@@ -39,5 +39,5 @@ python src/run_transformer_ner.py \
       --seed 13 \
       --warmup_ratio 0.1 \
       --max_num_checkpoints 3 \
-	--log_file ./log.txt \
-	--early_stop 3
+      --log_file ./log.txt \
+      --early_stop 3
