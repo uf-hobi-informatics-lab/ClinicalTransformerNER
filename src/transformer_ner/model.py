@@ -11,11 +11,11 @@ from transformers import (BertConfig,  BertModel, BertPreTrainedModel,
                           XLNetModel, XLNetPreTrainedModel, XLNetConfig,
                           AlbertModel, AlbertConfig,
                           DistilBertConfig, DistilBertModel,
-                          ALBERT_PRETRAINED_MODEL_ARCHIVE_MAP,
-                          DISTILBERT_PRETRAINED_MODEL_ARCHIVE_MAP,
-                          XLNET_PRETRAINED_MODEL_ARCHIVE_MAP,
-                          ROBERTA_PRETRAINED_MODEL_ARCHIVE_MAP,
-                          BERT_PRETRAINED_MODEL_ARCHIVE_MAP,
+                          ALBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
+                          DISTILBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
+                          XLNET_PRETRAINED_MODEL_ARCHIVE_LIST,
+                          ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST,
+                          BERT_PRETRAINED_MODEL_ARCHIVE_LIST,
                           BartConfig, BartModel, ElectraForTokenClassification,
                           ElectraModel, XLNetForTokenClassification, AlbertPreTrainedModel,
                           RobertaForTokenClassification)
@@ -104,9 +104,9 @@ class Transformer_CRF(nn.Module):
 class BertLikeNerModel(PreTrainedModel):
     """not fit for the current training; but can be integrated into new APP"""
     CONF_REF = {
-        'bert': (BertConfig, BERT_PRETRAINED_MODEL_ARCHIVE_MAP, 'bert'),
-        'roberta': (RobertaConfig, ROBERTA_PRETRAINED_MODEL_ARCHIVE_MAP, 'roberta'),
-        'albert': (AlbertConfig, ALBERT_PRETRAINED_MODEL_ARCHIVE_MAP, 'albert')
+        'bert': (BertConfig, ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST, 'bert'),
+        'roberta': (RobertaConfig, ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST, 'roberta'),
+        'albert': (AlbertConfig, ALBERT_PRETRAINED_MODEL_ARCHIVE_LIST, 'albert')
     }
 
     def __init__(self, config, model_type, crf=None):
@@ -215,7 +215,7 @@ class BertNerModel(BertPreTrainedModel):
 
 class RobertaNerModel(BertPreTrainedModel):
     config_class = RobertaConfig
-    pretrained_model_archive_map = ROBERTA_PRETRAINED_MODEL_ARCHIVE_MAP
+    pretrained_model_archive_map = ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST
     base_model_prefix = "roberta"
 
     def __init__(self, config, crf=None):
@@ -319,7 +319,7 @@ class AlbertNerModel(AlbertPreTrainedModel):
 
 class DistilBertNerModel(BertPreTrainedModel):
     config_class = DistilBertConfig
-    pretrained_model_archive_map = DISTILBERT_PRETRAINED_MODEL_ARCHIVE_MAP
+    pretrained_model_archive_map = DISTILBERT_PRETRAINED_MODEL_ARCHIVE_LIST
     base_model_prefix = 'distilbert'
 
     def __init__(self, config, crf=None):
@@ -376,7 +376,8 @@ class XLNetNerModel(XLNetForTokenClassification):
     def active_using_crf(self):
         self.use_crf = True
 
-    def forward(self, input_ids=None,
+    def forward(self,
+                input_ids=None,
                 attention_mask=None,
                 mems=None,
                 perm_mask=None,
@@ -385,7 +386,12 @@ class XLNetNerModel(XLNetForTokenClassification):
                 input_mask=None,
                 head_mask=None,
                 inputs_embeds=None,
-                label_ids=None):
+                use_cache=True,
+                label_ids=None,
+                output_attentions=None,
+                output_hidden_states=None,
+        ):
+
         outputs = self.xlnet(input_ids=input_ids,
                              attention_mask=attention_mask,
                              mems=mems,
@@ -512,7 +518,17 @@ class ElectraNerModel(ElectraForTokenClassification):
     def active_using_crf(self):
         self.use_crf = True
 
-    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, inputs_embeds=None, label_ids=None):
+    def forward(self,
+                input_ids=None,
+                attention_mask=None,
+                token_type_ids=None,
+                position_ids=None,
+                head_mask=None,
+                inputs_embeds=None,
+                label_ids=None,
+                output_attentions=None,
+                output_hidden_states=None):
+
         outputs = self.electra(input_ids,
                                attention_mask=attention_mask,
                                token_type_ids=token_type_ids,
