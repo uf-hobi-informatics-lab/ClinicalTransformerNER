@@ -22,9 +22,10 @@ python src/run_transformer_ner.py \
       --pretrained_model bert-base-uncased \
       --data_dir ./test_data/conll-2003 \
       --new_model_dir ./new_bert_ner_model \
-      --overwrite_output_dir \
+      --overwrite_model_dir \
       --predict_output_file ./bert_pred.txt \
       --max_seq_length 256 \
+      --save_model_core \
       --do_train \
       --do_predict \
       --model_selection_scoring strict-f_score-1 \
@@ -40,4 +41,5 @@ python src/run_transformer_ner.py \
       --warmup_ratio 0.1 \
       --max_num_checkpoints 3 \
       --log_file ./log.txt \
+      --progress_bar \
       --early_stop 3

@@ -12,7 +12,7 @@ The package is the implementation of a transformer based NER system for clinical
 - XLNet
 
 ## Usage and example
-- Training
+- Training and test with BIO 
 
 ```shell script
 # set GPU
@@ -24,9 +24,10 @@ python src/run_transformer_ner.py \
       --pretrained_model bert-base-uncased \
       --data_dir ./test_data/conll-2003 \
       --new_model_dir ./new_bert_ner_model \
-      --overwrite_output_dir \
+      --overwrite_model_dir \
       --predict_output_file ./bert_pred.txt \
       --max_seq_length 256 \
+      --save_model_core \
       --do_train \
       --do_predict \
       --model_selection_scoring strict-f_score-1 \
@@ -40,25 +41,26 @@ python src/run_transformer_ner.py \
       --do_warmup \
       --seed 13 \
       --warmup_ratio 0.1 \
-      --max_num_checkpoints 1 \
+      --max_num_checkpoints 3 \
       --log_file ./log.txt \
       --progress_bar \
       --early_stop 3
 ```
 
-- Test
+- Test on multiple files and convert bio to brat format
 
 ```shell script
 export CUDA_VISIBLE_DEVICES=0
 
 # config and tokenizer information can be found in the pretrained model dir
 # use format 1 for BRAT, 2 for BioC, 0 as default for BIO
-python src/run_transformer_ner.py \
+python ./src/run_transformer_batch_prediction.py \
       --model_type bert \
-      --pretrained_model ./new_bert_ner_model \
-      --data_dir ./test_data/conll-2003 \
-      --output_dir ./bert_pred.txt \
-      --max_seq_length 256 \
+      --pretrained_model <your pretrained model path> \
+      --raw_text_dir <path to the original text files> \
+      --preprocessed_text_dir <path to the bio formatted files> \
+      --output_dir <path to save predicted results> \
+      --max_seq_length 128 \
       --do_lower_case \
       --eval_batch_size 8 \
       --log_file ./log.txt\
