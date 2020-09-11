@@ -19,8 +19,12 @@ from common_utils.common_log import LOG_LVLs
 from common_utils.output_format_converter import main as format_converter
 
 import transformers
-version = transformers.__version__
-assert version > '2.10.0', 'we now only support transformers version >=2.11.0, but your version is {}'.format(version)
+from packaging import version
+
+
+pytorch_version = version.parse(transformers.__version__)
+assert pytorch_version >= version.parse('3.0.0'), \
+    'we now only support transformers version >=3.0.0, but your version is {}'.format(pytorch_version)
 
 
 def main(args):

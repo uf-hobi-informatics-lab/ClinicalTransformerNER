@@ -128,7 +128,8 @@ Otherwise may cause prediction error.''')
                     word_info = word.split(" ")
                     nsent.append(word_info[0])
                     if self.has_offset_info:
-                        # In training data we record the original token offsets right after the token e.g., Record 0 4 0 4 O
+                        # In training data we record the original token offsets right after the token 
+                        # e.g., Record 0 4 0 4 O
                         # In the example, the first two numbers are original offsets, the second two numbers are new offsets after pre-processing
                         offsets.append((word_info[1], word_info[2], word_info[3], word_info[4]))
                     if task == "train":
@@ -142,9 +143,13 @@ Otherwise may cause prediction error.''')
 
 
 def __seq2fea(new_tokens, new_labels, guards, tokenizer, max_seq_length, label2idx):
-    if isinstance(tokenizer, BertTokenizer) or isinstance(tokenizer, DistilBertTokenizer) or isinstance(tokenizer, ElectraTokenizer):
+    if isinstance(tokenizer, BertTokenizer) or \
+            isinstance(tokenizer, DistilBertTokenizer) or \
+            isinstance(tokenizer, ElectraTokenizer):
         s_tk, e_tk, pad_tk = '[CLS]', '[SEP]', '[PAD]'
-    elif isinstance(tokenizer, RobertaTokenizer) or isinstance(tokenizer, BartTokenizer):
+    elif isinstance(tokenizer, RobertaTokenizer) or \
+            isinstance(tokenizer, BartTokenizer) or \
+            isinstance(tokenizer, LongformerTokenizer):
         s_tk, e_tk, pad_tk = '<s>', '</s>', '<pad>'
     elif isinstance(tokenizer, XLNetTokenizer):
         s_tk, e_tk, pad_tk = '<cls>', '<sep>', '<pad>'

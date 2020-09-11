@@ -7,9 +7,13 @@ from transformer_ner.task import run_task
 from transformer_ner.transfomer_log import TransformerNERLogger
 from traceback import format_exc
 
+from packaging import version
 import transformers
-version = transformers.__version__
-assert version > '2.10.0', 'we now only support transformers version >=2.11.0, but your version is {}'.format(version)
+
+
+pytorch_version = version.parse(transformers.__version__)
+assert pytorch_version >= version.parse('3.0.0'), \
+    'we now only support transformers version >=3.0.0, but your version is {}'.format(pytorch_version)
 
 
 def main():
@@ -31,7 +35,8 @@ def main():
     parser.add_argument("--new_model_dir", type=str, required=True,
                         help="directory for saving new model checkpoints (keep latest n only)")
     parser.add_argument("--save_model_core", action='store_true',
-                        help="save the transformer core of the model which allows model to be used as base model for further pretraining")
+                        help="""save the transformer core of the model 
+                        which allows model to be used as base model for further pretraining""")
     parser.add_argument("--predict_output_file", type=str, default=None,
                         help="predicted results output file.")
     parser.add_argument('--overwrite_model_dir', action='store_true',
@@ -43,7 +48,8 @@ def main():
     parser.add_argument("--do_train", action='store_true',
                         help="Whether to run training.")
     parser.add_argument("--model_selection_scoring", default='strict-f_score-1', type=str,
-                        help='The scoring methos used to select model on dev dataset only support strict-f_score-n, relax-f_score-n (n is 0.5, 1, or 2)')
+                        help="""The scoring methos used to select model on dev dataset 
+                        only support strict-f_score-n, relax-f_score-n (n is 0.5, 1, or 2)""")
     parser.add_argument("--do_predict", action='store_true',
                         help="Whether to run prediction on the test set.")
     parser.add_argument("--use_crf", action='store_true',
@@ -81,14 +87,14 @@ def main():
     parser.add_argument("--progress_bar", action='store_true',
                         help="show progress during the training in tqdm")
     parser.add_argument("--early_stop", default=-1, type=int,
-                        help="The training will stop after num of epoch without performance improvement. If set to 0 or -1, then not use early stop.")
+                        help="""The training will stop after num of epoch without performance improvement. If set to 0 or -1, then not use early stop.""")
 
     # fp16 and distributed training
     parser.add_argument('--fp16', action='store_true',
                         help="Whether to use 16-bit float precision instead of 32-bit")
-    parser.add_argument("--fp16_opt_level", type=str, default="O1",
-                        help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
-                             "See details at https://nvidia.github.io/apex/amp.html")
+    # parser.add_argument("--fp16_opt_level", type=str, default="O1",
+    #                     help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
+    #                          "See details at https://nvidia.github.io/apex/amp.html")
     # parser.add_argument("--local_rank", type=int, default=-1, help="local_rank for distributed training on gpus")
     # parser.add_argument('--server_ip', type=str, default='', help="Can be used for distant debugging.")
     # parser.add_argument('--server_port', type=str, default='', help="Can be used for distant debugging.")

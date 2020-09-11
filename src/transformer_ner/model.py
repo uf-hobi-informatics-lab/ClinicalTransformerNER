@@ -551,7 +551,6 @@ class ElectraNerModel(ElectraForTokenClassification):
                 active_logits = logits.view(-1, self.num_labels)
                 active_labels = label_ids.view(-1)
 
-            # loss_fct = nn.CrossEntropyLoss()
             loss = self.loss_fct(active_logits, active_labels)
 
         return logits, active_logits, loss

@@ -60,9 +60,20 @@ def load_model(args, new_model_dir=None):
     args.logger.info("load checkpoint from {}".format(sorted_file[-1]))
     ckpt = torch.load(sorted_file[-1], map_location=torch.device('cpu'))
     # #load model as state_dict
-    model = MODEL_CLASSES[args.model_type][1]
-    model = model(config=args.config)
-    model.load_state_dict(state_dict=ckpt)
+    try:
+        model = MODEL_CLASSES[args.model_type][1]
+        if args.use_crf:
+            crf_layer = Transformer_CRF(num_labels=args.num_labels, start_label_id=args.label2idx['CLS'])
+            model = model(config=args.config, crf=crf_layer)
+            model.active_using_crf()
+        else:
+            model = model(config=args.config)
+        model.load_state_dict(state_dict=ckpt)
+    except AttributeError as Ex:
+        args.logger.warning(
+            """The model seems save using model.save instead of model.state_dict,
+            attempt to directly using the loaded checkpoint as model.""")
+        model = ckpt
     return model
 
 
@@ -83,7 +94,8 @@ def save_only_transformer_core(args, model):
     elif model_type == "electra":
         model_core = model.electra
     else:
-        args.logger.warning("{} is current not supported for saving model core; we will skip saving to prevent error.".format(args.model_type))
+        args.logger.warning("{} is current not supported for saving model core; we will skip saving to prevent error.".format(
+            args.model_type))
         return
     model_core.save_pretrained(args.new_model_dir)
 
@@ -110,11 +122,19 @@ def save_model(args, model, model_dir, index, latest=3):
 def check_partial_token(token_as_id, tokenizer):
     token = tokenizer.convert_ids_to_tokens(int(token_as_id))
     flag = False
-    if (isinstance(tokenizer, BertTokenizer) or isinstance(tokenizer, DistilBertTokenizer) or isinstance(tokenizer, ElectraTokenizer)) and token.startswith('##'):
+    if (isinstance(tokenizer, BertTokenizer) or
+        isinstance(tokenizer, DistilBertTokenizer) or
+        isinstance(tokenizer, ElectraTokenizer)) \
+            and token.startswith('##'):
         flag = True
-    elif (isinstance(tokenizer, RobertaTokenizer) or isinstance(tokenizer, BartTokenizer)) and not token.startswith('Ġ'):
+    elif (isinstance(tokenizer, RobertaTokenizer) or
+          isinstance(tokenizer, BartTokenizer) or
+          isinstance(tokenizer, LongformerTokenizer)) \
+            and not token.startswith('Ġ'):
         flag = True
-    elif (isinstance(tokenizer, AlbertTokenizer) or isinstance(tokenizer, XLNetTokenizer)) and not token.startswith('▁'):
+    elif (isinstance(tokenizer, AlbertTokenizer) or
+          isinstance(tokenizer, XLNetTokenizer)) \
+            and not token.startswith('▁'):
         flag = True
     return flag
 
@@ -141,24 +161,31 @@ def train(args, model, train_features, dev_features):
     # parameters for optimization
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': args.weight_decay},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 
+        'weight_decay': args.weight_decay},
+        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 
+        'weight_decay': 0.0}
     ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
 
     # using fp16 for training rely on Nvidia apex package
+ # fp16 training: try to use PyTorch naive implementation if available; we will only support apex anymore
+    scaler = None
+    autocast = None
     if args.fp16:
         try:
-            from apex import amp
-        except ImportError:
-            raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
-        model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
+            autocast = torch.cuda.amp.autocast
+            scaler = torch.cuda.amp.GradScaler()
+        except Exception:
+            raise ImportError("You need to update to PyTorch 1.6, the current PyTorch version is {}"
+                              .format(torch.__version__))
 
     # training linear warm-up setup
     scheduler = None
     if args.do_warmup:
         warmup_steps = np.dtype('int64').type(args.warmup_ratio * t_total)
-        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=t_total)
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer, num_warmup_steps=warmup_steps, num_training_steps=t_total)
 
     args.logger.info("***** Running training *****")
     args.logger.info("  Num data points = {}".format(len(data_loader)))
@@ -177,7 +204,8 @@ def train(args, model, train_features, dev_features):
 
     # save base model name to a base_model_name.txt
     with open(new_model_dir/"base_model_name.txt", "w") as f:
-        f.write('model_type: {}\nbase_model: {}\nconfig: {}\ntokenizer: {}'.format(args.model_type, args.pretrained_model, args.config_name, args.tokenizer_name))
+        f.write('model_type: {}\nbase_model: {}\nconfig: {}\ntokenizer: {}'.format(
+            args.model_type, args.pretrained_model, args.config_name, args.tokenizer_name))
 
     global_step = 0
     tr_loss = .0
@@ -192,50 +220,61 @@ def train(args, model, train_features, dev_features):
             model.train()
             batch = tuple(b.to(args.device) for b in batch)
             train_inputs = batch_to_model_inputs(batch, args.model_type)
-            _, _, loss = model(**train_inputs)
+            
+            if args.fp16:
+                 with autocast():
+                    _, _, loss = model(**train_inputs)
+            else:
+                _, _, loss = model(**train_inputs)
 
-            if args.gradient_accumulation_steps > 1:
-                loss = loss / args.gradient_accumulation_steps
+            loss = loss / args.gradient_accumulation_steps
+            tr_loss += loss.item()
 
             if args.fp16:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
+                scaler.scale(loss).backward()
             else:
                 loss.backward()
-            # loss.backward()
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-            tr_loss += loss.item()
+            
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if args.fp16:
-                    torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                    scaler.step(optimizer)
+                    scaler.update()
                 else:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-                optimizer.step()
+                    optimizer.step()
+                
                 if args.do_warmup:
                     scheduler.step()
+                
                 model.zero_grad()
                 global_step += 1
 
             # using training step
             if args.train_steps > 0 and (global_step + 1) % args.train_steps == 0 and epoch > 0:
                 # the current implementation will skip the all evaluations in the first epoch
-                best_score, eval_loss = evaluate(args, model, new_model_dir, dev_features, epoch, global_step, best_score)
+                best_score, eval_loss = evaluate(
+                    args, model, new_model_dir, dev_features, epoch, global_step, best_score)
                 args.logger.info("""
                 Global step: {}; 
                 Epoch: {}; 
                 average_train_loss: {:.4f}; 
                 eval_loss: {:.4f}; 
-                current best score: {:.4f}""".format(global_step, epoch+1, round(tr_loss / global_step, 4), eval_loss, best_score))
+                current best score: {:.4f}""".format(
+                    global_step, epoch+1, round(tr_loss / global_step, 4), eval_loss, best_score))
 
         # default model select method using strict F1-score with beta=1; evaluate model after each epoch on dev
         if args.train_steps <= 0 or epoch == 0:
-            best_score, eval_loss = evaluate(args, model, new_model_dir, dev_features, epoch, global_step, best_score)
+            best_score, eval_loss = evaluate(
+                args, model, new_model_dir, dev_features, epoch, global_step, best_score)
             args.logger.info("""
                 Global step: {}; 
                 Epoch: {}; 
                 average_train_loss: {:.4f}; 
                 eval_loss: {:.4f}; 
-                current best score: {:.4f}""".format(global_step, epoch+1, round(tr_loss / global_step, 4), eval_loss, best_score))
+                current best score: {:.4f}""".format(
+                    global_step, epoch+1, round(tr_loss / global_step, 4), eval_loss, best_score))
 
         # early stop check
         if epcoh_best_score < best_score:
@@ -283,7 +322,7 @@ def _eval(args, model, features):
             # update evaluate loss
             eval_loss += loss.item()
 
-        assert guards.shape == original_tkid.shape == original_mask.shape == original_labels.shape == raw_logits.shape,  \
+        assert guards.shape == original_tkid.shape == original_mask.shape == original_labels.shape == raw_logits.shape, \
             """
                 expect same dimension for all the inputs and outputs but get
                 input_tokens: {}
@@ -296,7 +335,8 @@ def _eval(args, model, features):
         for mks, lbs, lgts, gds in zip(original_mask, original_labels, raw_logits, guards):
             connect_sent_flag = False
             for mk, lb, lgt, gd in zip(mks, lbs, lgts, gds):
-                if mk == 0:  # after hit first mask, we can stop for the current sentence since all rest will be pad (not for xlnet)
+                if mk == 0:  
+                    # after hit first mask, we can stop for the current sentence since all rest will be pad (not for xlnet)
                     if args.model_type == "xlnet":
                         continue
                     else:
@@ -398,7 +438,8 @@ def _output_bio(args, tests, preds):
     assert len(tests) == len(preds), "Expect {} sents but get {} sents in prediction".format(len(tests), len(preds))
     for example, predicted_labels in zip(tests, preds):
         tokens = example.text
-        assert len(tokens) == len(predicted_labels), "Not same length sentence\nExpect: {} {}\nBut: {} {}".format(len(tokens), tokens, len(predicted_labels), predicted_labels)
+        assert len(tokens) == len(predicted_labels), "Not same length sentence\nExpect: {} {}\nBut: {} {}".format(
+            len(tokens), tokens, len(predicted_labels), predicted_labels)
         offsets = example.offsets
         if offsets:
             new_sent = [(tk, ofs[0], ofs[1], ofs[2], ofs[3], lb) for tk, ofs, lb in zip(tokens, offsets, predicted_labels)]
@@ -426,7 +467,10 @@ def run_task(args):
     set_seed(args.seed)
 
     if os.path.exists(args.new_model_dir) and os.listdir(args.new_model_dir) and args.do_train and not args.overwrite_model_dir:
-        raise ValueError('new model directory: {} exists. Use --overwrite_model_dir to overwrite the previous model or create another directory for the new model'.format(args.new_model_dir))
+        raise ValueError(
+            """new model directory: {} exists. 
+            Use --overwrite_model_dir to overwrite the previous model. 
+            Or create another directory for the new model""".format(args.new_model_dir))
 
     # init data processor
     ner_data_processor = TransformerNerDataProcessor()
@@ -442,6 +486,7 @@ def run_task(args):
 
     num_labels = len(label2idx)
     idx2label = {v: k for k, v in label2idx.items()}
+    args.num_labels = num_labels
     args.label2idx = label2idx
     args.idx2label = idx2label
 
@@ -470,6 +515,7 @@ def run_task(args):
 
         # #add an control token for combine sentence if it is too long to fit max_seq_len
         model.resize_token_embeddings(len(tokenizer))
+        config.vocab_size = len(tokenizer)
         args.tokenizer = tokenizer
         args.config = model.config
         model.to(args.device)
@@ -513,70 +559,6 @@ def run_task(args):
         predictions = predict(args, model, test_features)
         _output_bio(args, test_example, predictions)
 
-
-def test():
-    from pathlib import Path
-    from transformer_ner.transfomer_log import TransformerNERLogger
-
-    class Args:
-        def __init__(self):
-            self.model_type = 'bert'
-            self.pretrained_model = 'bert-base-uncased'
-            # self.model_type = 'roberta'
-            # self.pretrained_model = 'roberta-base'
-            # self.model_type = 'albert'
-            # self.pretrained_model = 'albert-base-v2'
-            # self.model_type = 'distilbert'
-            # self.pretrained_model = 'distilbert-base-uncased'
-            # self.model_type = 'xlnet'
-            # self.pretrained_model = 'xlnet-base-cased'
-            # self.model_type = 'bart'
-            # self.pretrained_model = 'bart-large'
-            # self.model_type = 'electra'
-            # self.pretrained_model = 'google/electra-small-discriminator'
-            self.config_name = self.pretrained_model
-            self.tokenizer_name = self.pretrained_model
-            self.do_lower_case = False
-            self.data_dir = '/Users/alexgre/workspace/py3/pytorch_nlp/pytorch_UFHOBI_NER/test_data/conll-2003'
-            self.data_has_offset_information = False
-            self.use_crf = True
-            self.new_model_dir = Path(__file__).resolve().parent.parent.parent / 'new_ner_model'
-            self.predict_output_file = Path(__file__).resolve().parent.parent.parent / "new_ner_model/pred.txt"
-            self.overwrite_model_dir = True
-            self.max_seq_length = 128
-            self.do_train = True
-            self.do_predict = True
-            self.model_selection_scoring = "strict-f_score-1"
-            self.train_batch_size = 2
-            self.eval_batch_size = 2
-            self.learning_rate = 0.00001
-            self.seed = 13
-            self.logger = TransformerNERLogger(logger_level="i", logger_file=Path(__file__).resolve().parent.parent.parent/"new_ner_model/log.txt").get_logger()
-            self.num_train_epochs = 1
-            self.gradient_accumulation_steps = 1
-            self.do_warmup = True
-            self.label2idx = None
-            self.idx2label = None
-            self.max_num_checkpoints = 3
-            self.warmup_ratio = 0.1
-            self.weight_decay = 0.0
-            self.adam_epsilon = 0.00000001
-            self.max_grad_norm = 1.0
-            self.log_file = None
-            self.log_lvl = None
-            self.fp16 = False
-            self.local_rank = -1
-            self.device = "cpu"
-            self.train_steps = -1
-            self.progress_bar = True
-            self.early_stop = -1
-            self.save_model_core = False
-
-    args = Args()
-    run_task(args)
-
-    from eval_scripts.old_bio_eval import main as eval_main
-    eval_main(os.path.join(args.data_dir, "test.txt"), args.predict_output_file)
 
 
 if __name__ == '__main__':
