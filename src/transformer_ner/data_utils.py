@@ -207,7 +207,7 @@ def __seq2fea(new_tokens, new_labels, guards, tokenizer, max_seq_length, label2i
             cur_len += 1
 
     new_token_ids = tokenizer.convert_tokens_to_ids(new_tokens)
-    label_ids = list(map(lambda x: label2idx[x] if x in label2idx else 'O', new_labels))
+    label_ids = list(map(lambda x: label2idx[x] if x in label2idx else label2idx['O'], new_labels))
 
     if isinstance(tokenizer, XLNetTokenizer):
         # for single sequence, we do not need to assign PAD token_type_ids to 3

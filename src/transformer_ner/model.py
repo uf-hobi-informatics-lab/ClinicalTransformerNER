@@ -109,7 +109,7 @@ class BertLikeNerModel(PreTrainedModel):
         'albert': (AlbertConfig, ALBERT_PRETRAINED_MODEL_ARCHIVE_LIST, 'albert')
     }
 
-    def __init__(self, config, model_type, crf=None):
+    def __init__(self, config, model_type):
         super().__init__(config)
         self.model_type = model_type
         self.num_labels = config.num_labels
@@ -117,13 +117,13 @@ class BertLikeNerModel(PreTrainedModel):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
         self.loss_fct = nn.CrossEntropyLoss()
-        self.use_crf = False
-        self.crf_layer = None
+        self.use_crf = config.use_crf
+        if self.use_crf:
+            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
+        else:
+            self.crf_layer = None
         self.__prepare_model_instance(config)
         self.init_weights()
-
-    def active_using_crf(self):
-        self.use_crf = True
 
     def __prepare_model_instance(self, config):
         self.config_class, self.pretrained_model_archive_map, self.base_model_prefix = self.CONF_REF[self.model_type]
@@ -171,19 +171,19 @@ class BertNerModel(BertPreTrainedModel):
       (loss_fct): CrossEntropyLoss()
       (crf_layer): Transformer_CRF()
     """
-    def __init__(self, config, crf=None):
+    def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
         self.loss_fct = nn.CrossEntropyLoss()
-        self.use_crf = False
-        self.crf_layer = crf
+        self.use_crf = config.use_crf
+        if self.use_crf:
+            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
+        else:
+            self.crf_layer = None
         self.init_weights()
-
-    def active_using_crf(self):
-        self.use_crf = True
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, label_ids=None):
         outputs = self.bert(input_ids,
@@ -218,19 +218,19 @@ class RobertaNerModel(BertPreTrainedModel):
     pretrained_model_archive_map = ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST
     base_model_prefix = "roberta"
 
-    def __init__(self, config, crf=None):
+    def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
         self.roberta = RobertaModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
         self.loss_fct = nn.CrossEntropyLoss()
-        self.use_crf = False
-        self.crf_layer = crf
+        self.use_crf = config.use_crf
+        if self.use_crf:
+            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
+        else:
+            self.crf_layer = None
         self.init_weights()
-
-    def active_using_crf(self):
-        self.use_crf = True
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, label_ids=None):
         """
@@ -276,19 +276,19 @@ class AlbertNerModel(AlbertPreTrainedModel):
     # pretrained_model_archive_map = ALBERT_PRETRAINED_MODEL_ARCHIVE_MAP
     # base_model_prefix = 'albert'
 
-    def __init__(self, config, crf=None):
+    def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
         self.albert = AlbertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
         self.loss_fct = nn.CrossEntropyLoss()
-        self.use_crf = False
-        self.crf_layer = crf
+        self.use_crf = config.use_crf
+        if self.use_crf:
+            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
+        else:
+            self.crf_layer = None
         self.init_weights()
-
-    def active_using_crf(self):
-        self.use_crf = True
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, label_ids=None):
         outputs = self.albert(input_ids,
@@ -322,19 +322,19 @@ class DistilBertNerModel(BertPreTrainedModel):
     pretrained_model_archive_map = DISTILBERT_PRETRAINED_MODEL_ARCHIVE_LIST
     base_model_prefix = 'distilbert'
 
-    def __init__(self, config, crf=None):
+    def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
         self.distilbert = DistilBertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
         self.loss_fct = nn.CrossEntropyLoss()
-        self.use_crf = False
-        self.crf_layer = crf
+        self.use_crf = config.use_crf
+        if self.use_crf:
+            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
+        else:
+            self.crf_layer = None
         self.init_weights()
-
-    def active_using_crf(self):
-        self.use_crf = True
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, label_ids=None):
         outputs = self.distilbert(input_ids,
@@ -362,19 +362,19 @@ class DistilBertNerModel(BertPreTrainedModel):
 
 
 class XLNetNerModel(XLNetForTokenClassification):
-    def __init__(self, config, crf=None):
+    def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
         self.xlnet = XLNetModel(config)
         self.classifier = nn.Linear(config.d_model, self.num_labels)
         self.dropout = nn.Dropout(config.dropout)
         self.loss_fct = nn.CrossEntropyLoss()
-        self.use_crf = False
-        self.crf_layer = crf
+        self.use_crf = config.use_crf
+        if self.use_crf:
+            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
+        else:
+            self.crf_layer = None
         self.init_weights()
-
-    def active_using_crf(self):
-        self.use_crf = True
 
     def forward(self,
                 input_ids=None,
@@ -433,16 +433,19 @@ class BartNerModel(PreTrainedModel):
     base_model_prefix = "bart"
     pretrained_model_archive_map = {"bart-large": "https://s3.amazonaws.com/models.huggingface.co/bert/facebook/bart-large/pytorch_model.bin"}
 
-    def __init__(self, config, crf=None, output_concat=False):
+    def __init__(self, config, output_concat=False):
         super().__init__(config)
         self.num_labels = config.num_labels
         self.bart = BartModel(config)
         self.dropout = nn.Dropout(config.dropout)
         self.classifier = nn.Linear(config.d_model, config.num_labels)
         self.loss_fct = nn.CrossEntropyLoss()
-        self.use_crf = False
+        self.use_crf = config.use_crf
+        if self.use_crf:
+            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
+        else:
+            self.crf_layer = None
         self.output_concat = output_concat
-        self.crf_layer = crf
         self.init_weights()
 
     def _init_weights(self, module):
@@ -456,9 +459,6 @@ class BartNerModel(PreTrainedModel):
             module.weight.data.normal_(mean=0.0, std=std)
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
-
-    def active_using_crf(self):
-        self.use_crf = True
 
     def forward(self, input_ids, attention_mask=None, decoder_input_ids=None, encoder_outputs=None, decoder_attention_mask=None, decoder_cached_states=None, label_ids=None):
         # dco = decoder output; eco = encoder output
@@ -504,19 +504,19 @@ class ElectraNerModel(ElectraForTokenClassification):
       (crf_layer): Transformer_CRF()
     """
 
-    def __init__(self, config, crf=None):
+    def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
         self.electra = ElectraModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
         self.loss_fct = nn.CrossEntropyLoss()
-        self.use_crf = False
-        self.crf_layer = crf
+        self.use_crf = config.use_crf
+        if self.use_crf:
+            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
+        else:
+            self.crf_layer = None
         self.init_weights()
-
-    def active_using_crf(self):
-        self.use_crf = True
 
     def forward(self,
                 input_ids=None,

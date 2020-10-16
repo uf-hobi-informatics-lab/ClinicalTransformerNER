@@ -62,12 +62,7 @@ def load_model(args, new_model_dir=None):
     # #load model as state_dict
     try:
         model = MODEL_CLASSES[args.model_type][1]
-        if args.use_crf:
-            crf_layer = Transformer_CRF(num_labels=args.num_labels, start_label_id=args.label2idx['CLS'])
-            model = model(config=args.config, crf=crf_layer)
-            model.active_using_crf()
-        else:
-            model = model(config=args.config)
+        model = model(config=args.config)
         model.load_state_dict(state_dict=ckpt)
     except AttributeError as Ex:
         args.logger.warning(
@@ -499,19 +494,10 @@ def run_task(args):
         tokenizer = model_tokenizer.from_pretrained(args.tokenizer_name, do_lower_case=args.do_lower_case)
         tokenizer.add_tokens([NEXT_TOKEN])
         config = model_config.from_pretrained(args.config_name, num_labels=num_labels)
-        tf_ckpts = list(Path(args.pretrained_model).glob("*.ckpt.index"))
-        from_tf_flag = True if tf_ckpts else False
-        if args.use_crf:
-            crf_layer = Transformer_CRF(num_labels=num_labels, start_label_id=label2idx['CLS'])
-            model = model_model.from_pretrained(args.pretrained_model,
-                                                from_tf=from_tf_flag,
-                                                config=config,
-                                                crf=crf_layer)
-            model.active_using_crf()
-        else:
-            model = model_model.from_pretrained(args.pretrained_model,
-                                                from_tf=from_tf_flag,
-                                                config=config)
+        config.use_crf = args.use_crf
+        config.label2idx = args.label2idx
+        args.logger.info("New Model Config:\n{}".format(config))
+        model = model_model.from_pretrained(args.pretrained_model, config=config)
 
         # #add an control token for combine sentence if it is too long to fit max_seq_len
         model.resize_token_embeddings(len(tokenizer))
@@ -558,8 +544,3 @@ def run_task(args):
 
         predictions = predict(args, model, test_features)
         _output_bio(args, test_example, predictions)
-
-
-
-if __name__ == '__main__':
-    test()

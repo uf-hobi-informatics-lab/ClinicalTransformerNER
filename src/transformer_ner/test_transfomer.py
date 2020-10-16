@@ -16,12 +16,13 @@ from transformer_ner.transfomer_log import TransformerNERLogger
 
 class Args:
     def __init__(self):
-        # self.model_type = 'bert'
+        self.model_type = 'bert'
+        self.pretrained_model = 'mimicii_bert_10e_128b'
         # self.pretrained_model = 'bert-base-uncased'
         # self.model_type = 'roberta'
         # self.pretrained_model = 'roberta-base'
-        self.model_type = 'albert'
-        self.pretrained_model = 'albert-base-v2'
+        # self.model_type = 'albert'
+        # self.pretrained_model = 'albert-base-v2'
         # self.model_type = 'distilbert'
         # self.pretrained_model = 'distilbert-base-uncased'
         # self.model_type = 'xlnet'
