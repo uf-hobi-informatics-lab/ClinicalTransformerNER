@@ -371,9 +371,9 @@ class XLNetNerModel(XLNetForTokenClassification):
         self.loss_fct = nn.CrossEntropyLoss()
         self.use_crf = config.use_crf
         if self.use_crf:
-            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
-        else:
-            self.crf_layer = None
+            raise Warning("Not support CRF for XLNet for now.")
+            # self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
+        self.crf_layer = None
         self.init_weights()
 
     def forward(self,
