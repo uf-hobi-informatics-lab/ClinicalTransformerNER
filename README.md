@@ -73,12 +73,12 @@ python ./src/run_transformer_batch_prediction.py \
 - Department of Health Outcomes and Biomedical Informatics, College of Medicine, University of Florida
 
 ## authors
-- Xi Yang
+- Xi Yang (alexgre@ufl.edu)
 - Jiang Bian
 - Yonghui Wu
 
 ## contact
-raise issue in our repo
+raise issue in our repo; or contact alexgre@ufl.edu
 
 ## reference
 please cite our paper:
