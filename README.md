@@ -1,7 +1,7 @@
 # Clinical Transformer NER
 
 ## Aim
-The package is the implementation of a transformer based NER system for clinical information extraction task. We aim to provide a simple and quick tool for researchers to conduct clinical NER without comprehensive knowledge of transformers. We also handle the sequence with length longer than the general transformer limits (512 tokens).
+The package is the implementation of a transformer based NER system for clinical information extraction task. We aim to provide a simple and quick tool for researchers to conduct clinical NER without comprehensive knowledge of transformers. We also implemented a strategy to handle the sequence with length longer than the general transformer limits (512 tokens) without truncating any tokens.
 
 ## Current available models
 - BERT

@@ -18,7 +18,8 @@ from transformers import (AdamW, get_linear_schedule_with_warmup,
                           AlbertConfig, AlbertTokenizer,
                           DistilBertConfig, DistilBertTokenizer,
                           BartConfig, BartTokenizer,
-                          ElectraConfig, ElectraTokenizer)
+                          ElectraConfig, ElectraTokenizer,
+                          LongformerConfig, LongformerTokenizer)
 import torch
 from torch.nn import functional as F
 from torch.nn import CrossEntropyLoss
@@ -44,7 +45,8 @@ MODEL_CLASSES = {
     'albert': (AlbertConfig, AlbertNerModel, AlbertTokenizer),
     'distilbert': (DistilBertConfig, DistilBertNerModel, DistilBertTokenizer),
     'bart': (BartConfig, BartNerModel, BartTokenizer),
-    'electra': (ElectraConfig, ElectraNerModel, ElectraTokenizer)
+    'electra': (ElectraConfig, ElectraNerModel, ElectraTokenizer),
+    'longformer': (LongformerConfig, LongformerNerModel, LongformerTokenizer)
 }
 
 
@@ -88,8 +90,11 @@ def save_only_transformer_core(args, model):
         model_core = model.bart
     elif model_type == "electra":
         model_core = model.electra
+    elif model_type == "longformer":
+        model_core = model.longformer
     else:
-        args.logger.warning("{} is current not supported for saving model core; we will skip saving to prevent error.".format(
+        args.logger.warning(
+            "{} is current not supported for saving model core; we will skip saving to prevent error.".format(
             args.model_type))
         return
     model_core.save_pretrained(args.new_model_dir)
