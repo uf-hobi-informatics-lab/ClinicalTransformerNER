@@ -12,14 +12,14 @@ and --tokenizer_name to base model name (e.g., bert-base-uncased). The base mode
 
 from common_utils.bio_prf_eval import BioEval
 from transformers import (AdamW, get_linear_schedule_with_warmup,
-                          BertConfig, BertTokenizer,
-                          XLNetConfig, XLNetTokenizer,
-                          RobertaConfig, RobertaTokenizer,
-                          AlbertConfig, AlbertTokenizer,
-                          DistilBertConfig, DistilBertTokenizer,
-                          BartConfig, BartTokenizer,
-                          ElectraConfig, ElectraTokenizer,
-                          LongformerConfig, LongformerTokenizer)
+                          BertConfig, DistilBertConfig, BartConfig, ElectraConfig, LongformerConfig,
+                          XLNetConfig, XLNetTokenizer, RobertaConfig, AlbertConfig, AlbertTokenizer)
+from transformers import RobertaTokenizerFast as RobertaTokenizer
+from transformers import BertTokenizerFast as BertTokenizer
+from transformers import DistilBertTokenizerFast as DistilBertTokenizer
+from transformers import LongformerTokenizerFast as LongformerTokenizer
+from transformers import ElectraTokenizerFast as ElectraTokenizer
+from transformers import BartTokenizerFast as BartTokenizer
 import torch
 from torch.nn import functional as F
 from torch.nn import CrossEntropyLoss
@@ -32,7 +32,7 @@ from common_utils.common_io import json_load, output_bio, json_dump
 
 from transformer_ner.model import (BertNerModel, RobertaNerModel, XLNetNerModel, AlbertNerModel,
                                    DistilBertNerModel, BertLikeNerModel, Transformer_CRF, BartNerModel,
-                                   ElectraNerModel)
+                                   ElectraNerModel, LongformerNerModel)
 from transformer_ner.data_utils import (TransformerNerDataProcessor, transformer_convert_data_to_features,
                                         ner_data_loader, batch_to_model_inputs,
                                         convert_features_to_tensors, NEXT_GUARD, NEXT_TOKEN)
@@ -161,15 +161,14 @@ def train(args, model, train_features, dev_features):
     # parameters for optimization
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 
-        'weight_decay': args.weight_decay},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 
-        'weight_decay': 0.0}
+        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+         'weight_decay': args.weight_decay},
+        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
 
     # using fp16 for training rely on Nvidia apex package
- # fp16 training: try to use PyTorch naive implementation if available; we will only support apex anymore
+    # fp16 training: try to use PyTorch naive implementation if available; we will only support apex anymore
     scaler = None
     autocast = None
     if args.fp16:
@@ -222,7 +221,7 @@ def train(args, model, train_features, dev_features):
             train_inputs = batch_to_model_inputs(batch, args.model_type)
             
             if args.fp16:
-                 with autocast():
+                with autocast():
                     _, _, loss = model(**train_inputs)
             else:
                 _, _, loss = model(**train_inputs)
@@ -336,7 +335,7 @@ def _eval(args, model, features):
             connect_sent_flag = False
             for mk, lb, lgt, gd in zip(mks, lbs, lgts, gds):
                 if mk == 0:  
-                    # after hit first mask, we can stop for the current sentence since all rest will be pad (not for xlnet)
+                    # after hit first mask, we can stop for the current sentence since all rest will be pad
                     if args.model_type == "xlnet":
                         continue
                     else:
@@ -496,7 +495,12 @@ def run_task(args):
 
     # training
     if args.do_train:
-        tokenizer = model_tokenizer.from_pretrained(args.tokenizer_name, do_lower_case=args.do_lower_case)
+        if args.model_type in {"roberta", "bart", "longformer"}:
+            # we need to set add_prefix_space to True for roberta, longformer, and Bart (any tokenizer from GPT-2)
+            tokenizer = model_tokenizer.from_pretrained(
+                args.tokenizer_name, do_lower_case=args.do_lower_case, add_prefix_space=True)
+        else:
+            tokenizer = model_tokenizer.from_pretrained(args.tokenizer_name, do_lower_case=args.do_lower_case)
         tokenizer.add_tokens([NEXT_TOKEN])
         config = model_config.from_pretrained(args.config_name, num_labels=num_labels)
         config.use_crf = args.use_crf
@@ -536,7 +540,12 @@ def run_task(args):
     # predict - test.txt file prediction (if you need predict many files, use 'run_transformer_batch_prediction')
     if args.do_predict:
         args.config = model_config.from_pretrained(args.new_model_dir, num_labels=num_labels)
-        args.tokenizer = model_tokenizer.from_pretrained(args.new_model_dir, do_lower_case=args.do_lower_case)
+        if args.model_type in {"roberta", "bart", "longformer"}:
+            # we need to set add_prefix_space to True for roberta, longformer, and Bart (any tokenizer from GPT-2)
+            tokenizer = model_tokenizer.from_pretrained(
+                args.tokenizer_name, do_lower_case=args.do_lower_case, add_prefix_space=True)
+        else:
+            args.tokenizer = model_tokenizer.from_pretrained(args.new_model_dir, do_lower_case=args.do_lower_case)
         model = load_model(args)
         model.to(args.device)
 

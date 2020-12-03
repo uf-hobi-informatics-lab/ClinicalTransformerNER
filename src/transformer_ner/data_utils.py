@@ -5,9 +5,15 @@ from pathlib import Path
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 import torch
 from torch.nn import CrossEntropyLoss
-from transformers import BertTokenizer, XLNetTokenizer, RobertaTokenizer, AlbertTokenizer, DistilBertTokenizer, BartTokenizer, ElectraTokenizer
+from transformers import XLNetTokenizer, AlbertTokenizer
+from transformers import RobertaTokenizerFast as RobertaTokenizer
+from transformers import BertTokenizerFast as BertTokenizer
+from transformers import DistilBertTokenizerFast as DistilBertTokenizer
+from transformers import LongformerTokenizerFast as LongformerTokenizer
+from transformers import ElectraTokenizerFast as ElectraTokenizer
+from transformers import BartTokenizerFast as BartTokenizer
 
-# NEXT_TOKEN = ";"
+
 NEXT_TOKEN = "[NEXT]"
 NEXT_GUARD = -2
 
@@ -254,10 +260,7 @@ def _transformer_convert_data_to_features_helper(args, raw_tokens, labels, guide
     """
     new_tokens, new_labels, guards = [], [], []
     for i, (raw_token, label) in enumerate(zip(raw_tokens, labels)):
-        if isinstance(tokenizer, RobertaTokenizer):
-            new_token = tokenizer.tokenize(raw_token, add_prefix_space=True)
-        else:
-            new_token = tokenizer.tokenize(raw_token)
+        new_token = tokenizer.tokenize(raw_token)
         new_tokens.extend(new_token)
         for k, _ in enumerate(new_token):
             if k == 0:
