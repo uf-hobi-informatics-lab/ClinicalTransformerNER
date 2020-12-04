@@ -5,13 +5,9 @@ from pathlib import Path
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 import torch
 from torch.nn import CrossEntropyLoss
-from transformers import XLNetTokenizer, AlbertTokenizer
-from transformers import RobertaTokenizerFast as RobertaTokenizer
-from transformers import BertTokenizerFast as BertTokenizer
-from transformers import DistilBertTokenizerFast as DistilBertTokenizer
-from transformers import LongformerTokenizerFast as LongformerTokenizer
-from transformers import ElectraTokenizerFast as ElectraTokenizer
-from transformers import BartTokenizerFast as BartTokenizer
+from transformers import (XLNetTokenizer, AlbertTokenizer, RobertaTokenizer,
+                          BertTokenizer, DistilBertTokenizer, LongformerTokenizer,
+                          ElectraTokenizer, BartTokenizer)
 
 
 NEXT_TOKEN = "[NEXT]"

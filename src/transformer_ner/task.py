@@ -12,14 +12,18 @@ and --tokenizer_name to base model name (e.g., bert-base-uncased). The base mode
 
 from common_utils.bio_prf_eval import BioEval
 from transformers import (AdamW, get_linear_schedule_with_warmup,
-                          BertConfig, DistilBertConfig, BartConfig, ElectraConfig, LongformerConfig,
-                          XLNetConfig, XLNetTokenizer, RobertaConfig, AlbertConfig, AlbertTokenizer)
-from transformers import RobertaTokenizerFast as RobertaTokenizer
-from transformers import BertTokenizerFast as BertTokenizer
-from transformers import DistilBertTokenizerFast as DistilBertTokenizer
-from transformers import LongformerTokenizerFast as LongformerTokenizer
-from transformers import ElectraTokenizerFast as ElectraTokenizer
-from transformers import BartTokenizerFast as BartTokenizer
+                          BertConfig, DistilBertConfig, BartConfig,
+                          XLNetConfig, XLNetTokenizer, RobertaConfig,
+                          AlbertConfig, AlbertTokenizer,
+                          BertConfig, BertTokenizer,
+                          XLNetConfig, XLNetTokenizer,
+                          RobertaConfig, RobertaTokenizer,
+                          AlbertConfig, AlbertTokenizer,
+                          DistilBertConfig, DistilBertTokenizer,
+                          BartConfig, BartTokenizer,
+                          ElectraConfig, ElectraTokenizer,
+                          LongformerConfig, LongformerTokenizer)
+
 import torch
 from torch.nn import functional as F
 from torch.nn import CrossEntropyLoss
@@ -45,8 +49,7 @@ MODEL_CLASSES = {
     'albert': (AlbertConfig, AlbertNerModel, AlbertTokenizer),
     'distilbert': (DistilBertConfig, DistilBertNerModel, DistilBertTokenizer),
     'bart': (BartConfig, BartNerModel, BartTokenizer),
-    'electra': (ElectraConfig, ElectraNerModel, ElectraTokenizer),
-    'longformer': (LongformerConfig, LongformerNerModel, LongformerTokenizer)
+    'electra': (ElectraConfig, ElectraNerModel, ElectraTokenizer)
 }
 
 
@@ -90,11 +93,8 @@ def save_only_transformer_core(args, model):
         model_core = model.bart
     elif model_type == "electra":
         model_core = model.electra
-    elif model_type == "longformer":
-        model_core = model.longformer
     else:
-        args.logger.warning(
-            "{} is current not supported for saving model core; we will skip saving to prevent error.".format(
+        args.logger.warning("{} is current not supported for saving model core; we will skip saving to prevent error.".format(
             args.model_type))
         return
     model_core.save_pretrained(args.new_model_dir)

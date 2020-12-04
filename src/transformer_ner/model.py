@@ -1,8 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 """
-We tried to implement a common class BertLikeNER for BERT, ROBERTA, ALBERT, DISTILBERT to share the common forward() function;
-However, such implementation will dramatically influence the model converage process.
+We tried to implement a common class BertLikeNER for BERT, ROBERTA, ALBERT, DISTILBERT
+to share the common forward() function;
+However, such implementation will dramatically influence the model converge process.
 The current implementation has repeated code but will guarantee the performance for each model.
 """
 
@@ -18,7 +19,7 @@ from transformers import (BertConfig,  BertModel, BertPreTrainedModel,
                           BERT_PRETRAINED_MODEL_ARCHIVE_LIST,
                           BartConfig, BartModel, ElectraForTokenClassification,
                           ElectraModel, XLNetForTokenClassification, AlbertPreTrainedModel,
-                          RobertaForTokenClassification, LongformerModel, LongformerForTokenClassification)
+                          RobertaForTokenClassification, LongformerForTokenClassification, LongformerModel)
 from torch import nn
 import torch
 

@@ -10,6 +10,7 @@ The package is the implementation of a transformer based NER system for clinical
 - ELECTRA
 - DistilBERT
 - XLNet
+- Longformer
 
 ## Usage and example
 - Training and test with BIO 

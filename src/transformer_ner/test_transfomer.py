@@ -13,12 +13,13 @@ class Args:
         self.config_name = self.pretrained_model
         self.tokenizer_name = self.pretrained_model
         self.do_lower_case = True
+        self.overwrite_model_dir = True
         self.data_dir = '/Users/alexgre/workspace/py3/pytorch_nlp/pytorch_UFHOBI_NER/test_data/conll-2003'
-        self.data_has_offset_information = True
-        self.new_model_dir = Path(__file__).resolve().parent.parent.parent/f'{model_type}_new_ner_model'
-        self.predict_output_file = Path(__file__).resolve().parent.parent.parent/f"{model_type}_new_ner_model/pred.txt"
+        self.data_has_offset_information = False
+        self.new_model_dir = Path(__file__).resolve().parent.parent.parent/f'new_ner_model/{model_type}_new_ner_model'
+        self.predict_output_file = Path(__file__).resolve().parent.parent.parent/f"new_ner_model/{model_type}_new_ner_model/pred.txt"
         self.overwrite_output_dir = True
-        self.max_seq_length = 64
+        self.max_seq_length = 16
         self.do_train = True
         self.do_predict = True
         self.model_selection_scoring = "strict-f_score-1"
@@ -48,10 +49,11 @@ class Args:
         self.early_stop = -1
         self.progress_bar = True
         self.save_model_core = True
+        self.use_crf = False
 
 
 def test():
-    for each in [('bert', 'bert-base-uncased'), ('xlnet', 'xlnet-base-cased'), ('roberta', 'roberta-base')]:
+    for each in [('roberta', 'roberta-base'), ('bert', 'bert-base-uncased'), ('xlnet', 'xlnet-base-cased')]:
         args = Args(each[0], each[1])
         run_task(args)
 
