@@ -49,7 +49,8 @@ MODEL_CLASSES = {
     'albert': (AlbertConfig, AlbertNerModel, AlbertTokenizer),
     'distilbert': (DistilBertConfig, DistilBertNerModel, DistilBertTokenizer),
     'bart': (BartConfig, BartNerModel, BartTokenizer),
-    'electra': (ElectraConfig, ElectraNerModel, ElectraTokenizer)
+    'electra': (ElectraConfig, ElectraNerModel, ElectraTokenizer),
+    'longformer': (LongformerConfig, LongformerNerModel, LongformerTokenizer)
 }
 
 

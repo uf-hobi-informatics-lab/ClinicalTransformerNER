@@ -356,14 +356,14 @@ def ner_data_loader(dataset, batch_size=2, task='train', auto=False):
 
 
 def batch_to_model_inputs(batch, model_type='bert'):
-    if model_type in {"bert", "roberta", "albert", "distilbert", "xlnet", "electra"}:
+    if model_type in {"bert", "albert", "distilbert", "xlnet", "electra"}:
         inputs = {
             'input_ids': batch[0],
             'attention_mask': batch[1],
             'token_type_ids': batch[2],
             'label_ids': batch[3]
         }
-    elif model_type in {"bart"}:
+    elif model_type in {"roberta", "bart", "longformer"}:
         inputs = {
             'input_ids': batch[0],
             'attention_mask': batch[1],
