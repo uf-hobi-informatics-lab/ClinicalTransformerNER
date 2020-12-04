@@ -501,7 +501,7 @@ def run_task(args):
                 args.tokenizer_name, do_lower_case=args.do_lower_case, add_prefix_space=True)
         else:
             tokenizer = model_tokenizer.from_pretrained(args.tokenizer_name, do_lower_case=args.do_lower_case)
-        tokenizer.add_tokens([NEXT_TOKEN])
+        tokenizer.add_tokens(NEXT_TOKEN)
         config = model_config.from_pretrained(args.config_name, num_labels=num_labels)
         config.use_crf = args.use_crf
         config.label2idx = args.label2idx

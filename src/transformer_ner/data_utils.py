@@ -10,7 +10,7 @@ from transformers import (XLNetTokenizer, AlbertTokenizer, RobertaTokenizer,
                           ElectraTokenizer, BartTokenizer)
 
 
-NEXT_TOKEN = "[NEXT]"
+NEXT_TOKEN = "[next]"
 NEXT_GUARD = -2
 
 
