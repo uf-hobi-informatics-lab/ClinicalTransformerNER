@@ -106,4 +106,4 @@ please cite our paper:
 - https://transformer-models.s3.amazonaws.com/mimiciii_bert_10e_128b.zip
 - https://transformer-models.s3.amazonaws.com/mimiciii_electra_5e_128b.zip
 - https://transformer-models.s3.amazonaws.com/mimiciii_roberta_10e_128b.zip
-
+- https://transformer-models.s3.amazonaws.com/mimiciii_xlnet_5e_128b.zip
