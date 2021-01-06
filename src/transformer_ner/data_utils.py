@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import warnings
 from pathlib import Path
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 import torch
@@ -121,18 +122,37 @@ Otherwise may cause prediction error.''')
             txt = f.read().strip()
             nsents = []
             sents = txt.split("\n\n")
-            for sent in sents:
+            for i, sent in enumerate(sents):
                 if sent.startswith('-DOCSTART'):
                     continue
                 nsent, offsets, labels = [], [], []
                 words = sent.split("\n")
-                for word in words:
+                for j, word in enumerate(words):
                     word_info = word.split(" ")
+                    if len(word_info) < 2:
+                        warnings.warn("""
+                        The word at [line: {} pos: {}] has no position or label information.
+                        This word will cause potential runtime error.
+                        Check if you have extra empty line between two sentences in the BIO files.
+                        To avoid runtime error, we skip this word.
+                        If skipping is not correct, please check the data_utils.py at line 130.""".format(i+1, j+1),
+                                      RuntimeWarning)
+                        continue
                     nsent.append(word_info[0])
                     if self.has_offset_info:
-                        # In training data we record the original token offsets right after the token 
+                        # In the BIO data, we require to record two sets of offsets (4 numbers) after token text.
                         # e.g., Record 0 4 0 4 O
-                        # In the example, the first two numbers are original offsets, the second two numbers are new offsets after pre-processing
+                        # In the example, the first two numbers are original offsets,
+                        # the second two numbers are new offsets after pre-processing.
+                        # If your do not conduct pre-processing and only use the original offsets,
+                        # you can just set new offsets after pre-processing as original offsets to avoid index error.
+                        warnings.warn("""
+                        In the BIO data, we require to record two sets of offsets (4 numbers) after token text.
+                        e.g., Record 0 4 0 4 O
+                        In the example, the first two numbers are original offsets,
+                        the second two numbers are new offsets after pre-processing.
+                        If your do not conduct pre-processing and only use the original offsets,
+                        you can just set new offsets after pre-processing as original offsets to avoid index error.""")
                         offsets.append((word_info[1], word_info[2], word_info[3], word_info[4]))
                     if task == "train":
                         unique_labels.add(word_info[-1])

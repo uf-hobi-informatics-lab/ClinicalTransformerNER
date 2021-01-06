@@ -53,7 +53,7 @@ class Args:
 
 
 def test():
-    for each in [('roberta', 'roberta-base'), ('bert', 'bert-base-uncased'), ('xlnet', 'xlnet-base-cased')]:
+    for each in [('bert', 'bert-base-uncased'), ('roberta', 'roberta-base'),  ('xlnet', 'xlnet-base-cased')]:
         args = Args(each[0], each[1])
         run_task(args)
 
