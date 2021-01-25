@@ -56,11 +56,13 @@ In the script below, you are asked to provide a preprocessed_text_dir which cont
 
 If you only use the BIO format for output (you have to remove --data_has_offset_information flag and set --do_format flag to 0), and the data format will be the format exactly as the conll-2003 dataset.
 
-If you need BRAT or BioC format as output (as the example script), then you have add offset information to the BIO data to indicate where each word is located in the raw text. We suggest you to follow the format below:
+If you need BRAT or BioC format as output (as the example script), then you have to add offset information to the BIO data to indicate where each word is located in the raw text. We suggest you to follow the format below:
 
 The original sentences: "Name: John Doe\nAge: 18"
 The two sentences after preprocesing "Name : John Doe\nAge : 18"
 
+then, you can convert the data into BIO format similar as the Conll-2003 as
+"""
 Name 0 4 0 4 O
 : 4 5 5 6 O
 John 6 10 7 11 B-name
@@ -69,6 +71,7 @@ Doe 11 14 12 15 I-name
 Age 15 18 16 19 O
 : 18 19 19 20 O
 18 20 22 22 24 B-age
+"""
 
 The first two numbers are the offsets of a word in the original text and the following two numbers are the offsets of a word in the preprocessed text. If you do not need to perform any preprocessing, then you have to set the second set of offsets as the first one.
 #################
