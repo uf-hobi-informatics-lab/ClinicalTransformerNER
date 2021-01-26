@@ -71,6 +71,8 @@ Doe 11 14 12 15 I-name
 Age 15 18 16 19 O
 : 18 19 19 20 O
 18 20 22 22 24 B-age
+
+For test purposes, you do not need to assign a real BIO labels for each word, you can just simple assign "O" to all of them. It will not influence the prediction results since the predictions will be converted to brat/BioC, and you need to use those for evaluation.
 """
 
 The first two numbers are the offsets of a word in the original text and the following two numbers are the offsets of a word in the preprocessed text. If you do not need to perform any preprocessing, then you have to set the second set of offsets as the first one.
