@@ -15,6 +15,7 @@ class Args:
         self.do_lower_case = True
         self.overwrite_model_dir = True
         self.data_dir = '/Users/alexgre/workspace/py3/pytorch_nlp/pytorch_UFHOBI_NER/test_data/conll-2003'
+        self.data_dir = "/Users/alexgre/Downloads/chia_bio/merge"
         self.data_has_offset_information = False
         self.new_model_dir = Path(__file__).resolve().parent.parent.parent/f'new_ner_model/{model_type}_new_ner_model'
         self.predict_output_file = Path(__file__).resolve().parent.parent.parent/f"new_ner_model/{model_type}_new_ner_model/pred.txt"

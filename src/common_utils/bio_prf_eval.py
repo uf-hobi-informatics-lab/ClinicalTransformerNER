@@ -204,11 +204,24 @@ class BioEval:
 
     @staticmethod
     def __relax_match(gs, pred, s_idx, e_idx, en_type):
+        # we adopt the partial match strategy which is very loose compare to right-left or approximate match
         for idx in range(s_idx, e_idx):
             gs_cate = gs[idx].split("-")[-1]
             pred_bound, pred_cate = pred[idx].split("-")
             if gs_cate == pred_cate == en_type:
                 return True
+        return False
+
+    @staticmethod
+    def __check_evaluated_already(gs_dict, cate, start_idx, end_idx):
+        for k, v in gs_dict.items():
+            c, s, e = k
+            if not (e < start_idx or s > end_idx) and c == cate:
+                if v == 0:
+                    return True
+                else:
+                    gs_dict[k] -= 1
+                    return False
         return False
 
     def __process_bio(self, gs_bio, pred_bio):
@@ -219,8 +232,10 @@ class BioEval:
                 self.acc.add_true_case()
             else:
                 self.acc.add_false_case()
+
         # process gold standard
         llen = len(gs_bio)
+        gs_dict = defaultdict(int)
         cur_idx = 0
         while cur_idx < llen:
             if gs_bio[cur_idx].strip() in self.label_not_for_eval:
@@ -233,6 +248,7 @@ class BioEval:
                     end_idx += 1
                 self.gs_all += 1
                 self.gs_cat[cate] += 1
+                gs_dict[(cate, start_idx, end_idx)] += 1
                 cur_idx = end_idx
         # process predictions
         cur_idx = 0
@@ -251,6 +267,9 @@ class BioEval:
                     self.all_relax.add_true_case()
                     self.cat_relax[cate].add_true_case()
                 elif self.__relax_match(gs_bio, pred_bio, start_idx, end_idx, cate):
+                    if self.__check_evaluated_already(gs_dict, cate, start_idx, end_idx):
+                        cur_idx = end_idx
+                        continue
                     self.all_strict.add_false_case()
                     self.cat_strict[cate].add_false_case()
                     self.all_relax.add_true_case()
