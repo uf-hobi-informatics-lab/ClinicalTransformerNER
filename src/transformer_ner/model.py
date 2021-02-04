@@ -19,7 +19,8 @@ from transformers import (BertConfig,  BertModel, BertPreTrainedModel,
                           BERT_PRETRAINED_MODEL_ARCHIVE_LIST,
                           BartConfig, BartModel, ElectraForTokenClassification,
                           ElectraModel, XLNetForTokenClassification, AlbertPreTrainedModel,
-                          RobertaForTokenClassification, LongformerForTokenClassification, LongformerModel)
+                          RobertaForTokenClassification, LongformerForTokenClassification, LongformerModel,
+                          DebertaModel, DebertaPreTrainedModel)
 from torch import nn
 import torch
 
@@ -611,3 +612,63 @@ class ElectraNerModel(ElectraForTokenClassification):
             loss = self.loss_fct(active_logits, active_labels)
 
         return logits, active_logits, loss
+
+
+class DeBertaNerModel(DebertaPreTrainedModel):
+    _keys_to_ignore_on_load_unexpected = [r"pooler"]
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.num_labels = config.num_labels
+        self.deberta = DebertaModel(config)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+        self.loss_fct = nn.CrossEntropyLoss()
+        self.use_crf = config.use_crf
+        if self.use_crf:
+            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
+        else:
+            self.crf_layer = None
+        self.init_weights()
+
+    def forward(
+            self,
+            input_ids=None,
+            attention_mask=None,
+            token_type_ids=None,
+            position_ids=None,
+            inputs_embeds=None,
+            label_ids=None,
+            output_attentions=None,
+            output_hidden_states=None,
+            return_dict=None
+        ):
+            outputs = self.deberta(
+                input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+                position_ids=position_ids,
+                inputs_embeds=inputs_embeds,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict
+            )
+
+            sequence_output = outputs[0]
+            sequence_output = self.dropout(sequence_output)
+            logits = self.classifier(sequence_output)
+
+            if self.use_crf:
+                logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            else:
+                if attention_mask is not None:
+                    active_idx = attention_mask.view(-1) == 1
+                    active_logits = logits.view(-1, self.num_labels)[active_idx]
+                    active_labels = label_ids.view(-1)[active_idx]
+                else:
+                    active_logits = logits.view(-1, self.num_labels)
+                    active_labels = label_ids.view(-1)
+
+                loss = self.loss_fct(active_logits, active_labels)
+
+            return logits, active_logits, loss

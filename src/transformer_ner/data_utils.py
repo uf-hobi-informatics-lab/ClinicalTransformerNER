@@ -8,7 +8,7 @@ import torch
 from torch.nn import CrossEntropyLoss
 from transformers import (XLNetTokenizer, AlbertTokenizer, RobertaTokenizer,
                           BertTokenizer, DistilBertTokenizer, LongformerTokenizer,
-                          ElectraTokenizer, BartTokenizer)
+                          ElectraTokenizer, BartTokenizer, DebertaTokenizer)
 
 
 NEXT_TOKEN = "[next]"
@@ -75,7 +75,9 @@ class TransformerNerDataProcessor(object):
         default is used to initialized the label2idx dict; will support bert, roberta and xlnet
         the system labels must be smaller than label id for 'O', otherwise there will be errors in prediction
         """
-        if default in {'bert', 'roberta', 'albert', 'distilbert', 'bart', 'xlnet', 'electra'} and not customized_label2idx:
+        if default in {'bert', 'roberta', 'albert',
+                       'distilbert', 'bart', 'xlnet',
+                       'electra', 'deberta', 'longformer'} and not customized_label2idx:
             # we do not need special label for SEP, using O instead
             # label2idx = {'O': 4, 'X': 3, 'PAD': 0, 'CLS': 1, 'SEP': 2}
             label2idx = {'O': 3, 'X': 2, 'PAD': 0, 'CLS': 1}
@@ -123,8 +125,6 @@ Otherwise may cause prediction error.''')
             nsents = []
             sents = txt.split("\n\n")
             for i, sent in enumerate(sents):
-                if sent.startswith('-DOCSTART'):
-                    continue
                 nsent, offsets, labels = [], [], []
                 words = sent.split("\n")
                 for j, word in enumerate(words):
@@ -167,7 +167,8 @@ Otherwise may cause prediction error.''')
 def __seq2fea(new_tokens, new_labels, guards, tokenizer, max_seq_length, label2idx):
     if isinstance(tokenizer, BertTokenizer) or \
             isinstance(tokenizer, DistilBertTokenizer) or \
-            isinstance(tokenizer, ElectraTokenizer):
+            isinstance(tokenizer, ElectraTokenizer) or \
+            isinstance(tokenizer, DebertaTokenizer):
         s_tk, e_tk, pad_tk = '[CLS]', '[SEP]', '[PAD]'
     elif isinstance(tokenizer, RobertaTokenizer) or \
             isinstance(tokenizer, BartTokenizer) or \
@@ -376,7 +377,7 @@ def ner_data_loader(dataset, batch_size=2, task='train', auto=False):
 
 
 def batch_to_model_inputs(batch, model_type='bert'):
-    if model_type in {"bert", "albert", "distilbert", "xlnet", "electra"}:
+    if model_type in {"bert", "albert", "distilbert", "xlnet", "electra", 'deberta'}:
         inputs = {
             'input_ids': batch[0],
             'attention_mask': batch[1],

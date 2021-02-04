@@ -22,7 +22,8 @@ from transformers import (AdamW, get_linear_schedule_with_warmup,
                           DistilBertConfig, DistilBertTokenizer,
                           BartConfig, BartTokenizer,
                           ElectraConfig, ElectraTokenizer,
-                          LongformerConfig, LongformerTokenizer)
+                          LongformerConfig, LongformerTokenizer,
+                          DebertaConfig, DebertaTokenizer)
 
 import torch
 from torch.nn import functional as F
@@ -36,7 +37,7 @@ from common_utils.common_io import json_load, output_bio, json_dump
 
 from transformer_ner.model import (BertNerModel, RobertaNerModel, XLNetNerModel, AlbertNerModel,
                                    DistilBertNerModel, BertLikeNerModel, Transformer_CRF, BartNerModel,
-                                   ElectraNerModel, LongformerNerModel)
+                                   ElectraNerModel, LongformerNerModel, DeBertaNerModel)
 from transformer_ner.data_utils import (TransformerNerDataProcessor, transformer_convert_data_to_features,
                                         ner_data_loader, batch_to_model_inputs,
                                         convert_features_to_tensors, NEXT_GUARD, NEXT_TOKEN)
@@ -50,7 +51,8 @@ MODEL_CLASSES = {
     'distilbert': (DistilBertConfig, DistilBertNerModel, DistilBertTokenizer),
     'bart': (BartConfig, BartNerModel, BartTokenizer),
     'electra': (ElectraConfig, ElectraNerModel, ElectraTokenizer),
-    'longformer': (LongformerConfig, LongformerNerModel, LongformerTokenizer)
+    'longformer': (LongformerConfig, LongformerNerModel, LongformerTokenizer),
+    'deberta': (DebertaConfig, DeBertaNerModel, DebertaTokenizer)
 }
 
 
@@ -94,6 +96,8 @@ def save_only_transformer_core(args, model):
         model_core = model.bart
     elif model_type == "electra":
         model_core = model.electra
+    elif model_type == "deberta":
+        model_core = model.deberta
     else:
         args.logger.warning("{} is current not supported for saving model core; we will skip saving to prevent error.".format(
             args.model_type))
@@ -120,24 +124,24 @@ def save_model(args, model, model_dir, index, latest=3):
         file_to_remove.unlink()
 
 
-def check_partial_token(token_as_id, tokenizer):
-    token = tokenizer.convert_ids_to_tokens(int(token_as_id))
-    flag = False
-    if (isinstance(tokenizer, BertTokenizer) or
-        isinstance(tokenizer, DistilBertTokenizer) or
-        isinstance(tokenizer, ElectraTokenizer)) \
-            and token.startswith('##'):
-        flag = True
-    elif (isinstance(tokenizer, RobertaTokenizer) or
-          isinstance(tokenizer, BartTokenizer) or
-          isinstance(tokenizer, LongformerTokenizer)) \
-            and not token.startswith('Ġ'):
-        flag = True
-    elif (isinstance(tokenizer, AlbertTokenizer) or
-          isinstance(tokenizer, XLNetTokenizer)) \
-            and not token.startswith('▁'):
-        flag = True
-    return flag
+# def check_partial_token(token_as_id, tokenizer):
+#     token = tokenizer.convert_ids_to_tokens(int(token_as_id))
+#     flag = False
+#     if (isinstance(tokenizer, BertTokenizer) or
+#         isinstance(tokenizer, DistilBertTokenizer) or
+#         isinstance(tokenizer, ElectraTokenizer)) \
+#             and token.startswith('##'):
+#         flag = True
+#     elif (isinstance(tokenizer, RobertaTokenizer) or
+#           isinstance(tokenizer, BartTokenizer) or
+#           isinstance(tokenizer, LongformerTokenizer)) \
+#             and not token.startswith('Ġ'):
+#         flag = True
+#     elif (isinstance(tokenizer, AlbertTokenizer) or
+#           isinstance(tokenizer, XLNetTokenizer)) \
+#             and not token.startswith('▁'):
+#         flag = True
+#     return flag
 
 
 def tensor_to_list(tensor):
@@ -496,8 +500,8 @@ def run_task(args):
 
     # training
     if args.do_train:
-        if args.model_type in {"roberta", "bart", "longformer"}:
-            # we need to set add_prefix_space to True for roberta, longformer, and Bart (any tokenizer from GPT-2)
+        if args.model_type in {"roberta", "bart", "longformer", "deberta"}:
+            # we need to set add_prefix_space to True for roberta, longformer, and Bart (any tokenizer from BPE)
             tokenizer = model_tokenizer.from_pretrained(
                 args.tokenizer_name, do_lower_case=args.do_lower_case, add_prefix_space=True)
         else:
@@ -507,6 +511,13 @@ def run_task(args):
         config.use_crf = args.use_crf
         config.label2idx = args.label2idx
         args.logger.info("New Model Config:\n{}".format(config))
+
+        if args.pretrained_model == "microsoft/deberta-xlarge-v2":
+            raise NotImplementedError("""the deberta-xlarge-v2 tokenizer is different from other deberta models
+            the support for deberta-xlarge-v2 is not implemented.
+            you can try other debata models: microsoft/deberta-base, 
+            microsoft/deberta-large, microsoft/deberta-xlarge""")
+
         model = model_model.from_pretrained(args.pretrained_model, config=config)
 
         # #add an control token for combine sentence if it is too long to fit max_seq_len
