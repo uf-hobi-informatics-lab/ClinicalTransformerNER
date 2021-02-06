@@ -4,13 +4,15 @@
 The package is the implementation of a transformer based NER system for clinical information extraction task. We aim to provide a simple and quick tool for researchers to conduct clinical NER without comprehensive knowledge of transformers. We also implemented a strategy to handle the sequence with length longer than the general transformer limits (512 tokens) without truncating any tokens.
 
 ## Current available models
-- BERT
-- RoBERTa
-- ALBERT
-- ELECTRA
-- DistilBERT
-- XLNet
-- Longformer
+- BERT (base, large, mimiciii-pretrained)
+- RoBERTa (base, large, mimiciii-pretrained)
+- ALBERT (base, large, xlarge, xxlarge, mimiciii-pretrained)
+- ELECTRA (base, large, mimiciii-pretrained)
+- DistilBERT (base)
+- XLNet (base, large, mimiciii-pretrained)
+- Longformer (allenai/longformer-base-4096, allenai/longformer-large-4096)
+- DeBERTa (microsoft/deberta-base, microsoft/deberta-large, microsoft/deberta-xlarge)
+> note: 1. all mimic-pretrained models are based on base transformer architecture (Download is available in the section MIMIC-III pre-trained models); 2. DeBERTa is not support xlarge-v2 due to tokenizer change in original implementation
 
 ## Usage and example
 - Training and test with BIO 
@@ -100,15 +102,15 @@ python ./src/run_transformer_batch_prediction.py \
 ## Organization
 - Department of Health Outcomes and Biomedical Informatics, College of Medicine, University of Florida
 
-## authors
+## Authors
 - Xi Yang (alexgre@ufl.edu)
-- Jiang Bian
-- Yonghui Wu
+- Jiang Bian (bianjiang@ufl.edu)
+- Yonghui Wu (yonghui.wu@ufl.edu)
 
-## contact
-raise issue in our repo; or contact alexgre@ufl.edu
+## Contact
+- If you have any questions, please raise an issue in the GitHub
 
-## reference
+## Reference
 please cite our paper:
 > Xi Yang, Jiang Bian, William R Hogan, Yonghui Wu, Clinical concept extraction using transformers, Journal of the American Medical Informatics Association, ocaa189, https://doi.org/10.1093/jamia/ocaa189
 
