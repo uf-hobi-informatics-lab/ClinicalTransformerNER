@@ -56,9 +56,12 @@ python src/run_transformer_ner.py \
 ##### note ######
 In the script below, you are asked to provide a preprocessed_text_dir which contains all the preprocessed file.
 
-If you only use the BIO format for output (you have to remove --data_has_offset_information flag and set --do_format flag to 0), and the data format will be the format exactly as the conll-2003 dataset.
+If you only use the BIO format for output (you have to remove --data_has_offset_information flag
+and set --do_format flag to 0), and the data format will be the format exactly as the conll-2003 dataset.
 
-If you need BRAT or BioC format as output (as the example script), then you have to add offset information to the BIO data to indicate where each word is located in the raw text. We suggest you to follow the format below:
+If you need BRAT or BioC format as output (as the example script), then you have to add offset information 
+to the BIO data to indicate where each word is located in the raw text. 
+We suggest you to follow the format below:
 
 The original sentences: "Name: John Doe\nAge: 18"
 The two sentences after preprocesing "Name : John Doe\nAge : 18"
@@ -74,10 +77,15 @@ Age 15 18 16 19 O
 : 18 19 19 20 O
 18 20 22 22 24 B-age
 
-For test purposes, you do not need to assign a real BIO labels for each word, you can just simple assign "O" to all of them. It will not influence the prediction results since the predictions will be converted to brat/BioC, and you need to use those for evaluation.
+For test purposes, you do not need to assign a real BIO labels for each word, 
+you can just simple assign "O" to all of them. 
+It will not influence the prediction results since the predictions will be converted to brat/BioC, 
+and you need to use those for evaluation.
 """
 
-The first two numbers are the offsets of a word in the original text and the following two numbers are the offsets of a word in the preprocessed text. If you do not need to perform any preprocessing, then you have to set the second set of offsets as the first one.
+The first two numbers are the offsets of a word in the original text and the following 
+two numbers are the offsets of a word in the preprocessed text. 
+If you do not need to perform any preprocessing, then you have to set the second set of offsets as the first one.
 #################
 
 export CUDA_VISIBLE_DEVICES=0
@@ -98,6 +106,9 @@ python ./src/run_transformer_batch_prediction.py \
       --do_copy \
       --data_has_offset_information
 ```
+
+## Wiki for all parameters
+[wiki](https://github.com/uf-hobi-informatics-lab/ClinicalTransformerNER.wiki.git)
 
 ## Organization
 - Department of Health Outcomes and Biomedical Informatics, College of Medicine, University of Florida
