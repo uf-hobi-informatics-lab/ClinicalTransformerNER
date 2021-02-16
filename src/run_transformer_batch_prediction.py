@@ -39,6 +39,7 @@ def main(args):
     args.tokenizer = tokenizer
     config = model_config.from_pretrained(args.pretrained_model, do_lower_case=args.do_lower_case)
     args.config = config
+    args.use_crf = config.use_crf
     model = load_model(args, args.pretrained_model)
     model.to(args.device)
 

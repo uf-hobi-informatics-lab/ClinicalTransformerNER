@@ -108,7 +108,7 @@ python ./src/run_transformer_batch_prediction.py \
 ```
 
 ## Wiki for all parameters
-[wiki](https://github.com/uf-hobi-informatics-lab/ClinicalTransformerNER.wiki.git)
+[wiki](https://github.com/uf-hobi-informatics-lab/ClinicalTransformerNER/wiki/Parameters)
 
 ## Organization
 - Department of Health Outcomes and Biomedical Informatics, College of Medicine, University of Florida

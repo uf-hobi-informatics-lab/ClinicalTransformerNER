@@ -552,6 +552,8 @@ def run_task(args):
     # predict - test.txt file prediction (if you need predict many files, use 'run_transformer_batch_prediction')
     if args.do_predict:
         args.config = model_config.from_pretrained(args.new_model_dir, num_labels=num_labels)
+        args.use_crf = args.config.use_crf
+        # args.model_type = args.config.model_type
         if args.model_type in {"roberta", "bart", "longformer"}:
             # we need to set add_prefix_space to True for roberta, longformer, and Bart (any tokenizer from GPT-2)
             tokenizer = model_tokenizer.from_pretrained(
