@@ -77,7 +77,7 @@ Age 15 18 16 19 O
 : 18 19 19 20 O
 18 20 22 22 24 B-age
 
-For test purposes, you do not need to assign a real BIO labels for each word, 
+For test purposes, you do not need to assign a real BIO label for each word, 
 you can just simple assign "O" to all of them. 
 It will not influence the prediction results since the predictions will be converted to brat/BioC, 
 and you need to use those for evaluation.
@@ -105,6 +105,12 @@ python ./src/run_transformer_batch_prediction.py \
       --do_format 1 \
       --do_copy \
       --data_has_offset_information
+
+####
+note: If you use do_format, then we have two outputs: 
+1) all bio outputs in output_dir; 
+2) 2) we create a formatted output dir (this dir's name is output_dir's name with a suffix of '_formatted_output') for the formatted outputs (brat format if you set do_format=1). If you set --do_copy, we will copy the .txt files to the formatted output dir, otherwise we only put .ann files in the formatted output dir.
+####
 ```
 
 ## Wiki for all parameters
