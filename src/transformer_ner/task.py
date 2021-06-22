@@ -98,6 +98,8 @@ def save_only_transformer_core(args, model):
         model_core = model.electra
     elif model_type == "deberta":
         model_core = model.deberta
+    elif model_type == "longformer":
+        model_core = model.longformer
     else:
         args.logger.warning("{} is current not supported for saving model core; we will skip saving to prevent error.".format(
             args.model_type))
@@ -124,24 +126,25 @@ def save_model(args, model, model_dir, index, latest=3):
         file_to_remove.unlink()
 
 
-# def check_partial_token(token_as_id, tokenizer):
-#     token = tokenizer.convert_ids_to_tokens(int(token_as_id))
-#     flag = False
-#     if (isinstance(tokenizer, BertTokenizer) or
-#         isinstance(tokenizer, DistilBertTokenizer) or
-#         isinstance(tokenizer, ElectraTokenizer)) \
-#             and token.startswith('##'):
-#         flag = True
-#     elif (isinstance(tokenizer, RobertaTokenizer) or
-#           isinstance(tokenizer, BartTokenizer) or
-#           isinstance(tokenizer, LongformerTokenizer)) \
-#             and not token.startswith('Ġ'):
-#         flag = True
-#     elif (isinstance(tokenizer, AlbertTokenizer) or
-#           isinstance(tokenizer, XLNetTokenizer)) \
-#             and not token.startswith('▁'):
-#         flag = True
-#     return flag
+def check_partial_token(token_as_id, tokenizer):
+    token = tokenizer.convert_ids_to_tokens(int(token_as_id))
+    flag = False
+    if (isinstance(tokenizer, BertTokenizer) or
+        isinstance(tokenizer, DistilBertTokenizer) or
+        isinstance(tokenizer, DebertaTokenizer) or
+        isinstance(tokenizer, ElectraTokenizer)) \
+            and token.startswith('##'):
+        flag = True
+    elif (isinstance(tokenizer, RobertaTokenizer) or
+          isinstance(tokenizer, BartTokenizer) or
+          isinstance(tokenizer, LongformerTokenizer)) \
+            and not token.startswith('Ġ'):
+        flag = True
+    elif (isinstance(tokenizer, AlbertTokenizer) or
+          isinstance(tokenizer, XLNetTokenizer)) \
+            and not token.startswith('▁'):
+        flag = True
+    return flag
 
 
 def tensor_to_list(tensor):
@@ -299,6 +302,10 @@ def _eval(args, model, features):
     args.logger.info("***** Running evaluation on {} number of test data *****".format(eval_size))
     args.logger.info("  Instantaneous batch size per GPU = {}".format(args.eval_batch_size))
     args.logger.info("******************************")
+
+    # not data for evaluation
+    if eval_size < 1:
+        return [], [], .0
 
     # prepare processing results for each batch
     y_trues, y_preds = [], []
