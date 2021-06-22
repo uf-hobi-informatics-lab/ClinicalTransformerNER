@@ -81,13 +81,11 @@ class TransformerNerDataProcessor(object):
             # we do not need special label for SEP, using O instead
             # label2idx = {'O': 4, 'X': 3, 'PAD': 0, 'CLS': 1, 'SEP': 2}
             label2idx = {'O': 3, 'X': 2, 'PAD': 0, 'CLS': 1}
-        # elif default == "xlnet" and not customized_label2idx:
-        #     label2idx = {'O': 6, 'X': 5, 'PAD': 4, 'CLS': 2, 'SEP': 3, 'SEG_ID_A': 0, 'SEG_ID_B': 1}
         else:
             if customized_label2idx:
                 self.logger.warning('''The customized label2idx may not be compatible with the output check; 
-Make sure all the control labels' indexes are smaller than the index of O;
-Otherwise may cause prediction error.''')
+Make sure all the control labels' indexes are smaller than the index of label O;
+Otherwise will cause prediction error.''')
                 label2idx = customized_label2idx
             else:
                 raise ValueError('The default parameter {} as a model type is not supported '.format(default))
@@ -118,12 +116,17 @@ Otherwise may cause prediction error.''')
             loading train and dev using task='train' where label will be load as well
             loading test using task='test' where all labels will be 'O'
         """
-        unique_labels = set()
         assert task in {'train', 'test'}, 'task shoud be either train or test but got {}'.format(task)
         with open(file_name, "r") as f:
             txt = f.read().strip()
-            nsents = []
+
+            if len(txt) < 1:
+                warnings.warn(f"{file_name} is an empty file.")
+                return [], set()
+
+            nsents, unique_labels = [], set()
             sents = txt.split("\n\n")
+
             for i, sent in enumerate(sents):
                 nsent, offsets, labels = [], [], []
                 words = sent.split("\n")
@@ -238,8 +241,9 @@ def __seq2fea(new_tokens, new_labels, guards, tokenizer, max_seq_length, label2i
     else:
         segment_ids = [0] * max_seq_length
 
-    assert len(new_tokens) + len(new_token_ids) + len(label_ids) + len(segment_ids) + len(masks) == 5 * max_seq_length, f'''
-            checkfeature generation; expect all data len = {max_seq_length} but 
+    assert len(new_tokens) + len(new_token_ids) + len(label_ids) + len(segment_ids) + len(masks) == 5 * max_seq_length, \
+        f'''
+            check feature generation; expect all data len = {max_seq_length} but 
             tokens: {len(new_tokens)},
             token_ids: {len(new_token_ids)}
             labels: {len(label_ids)},
@@ -360,10 +364,14 @@ def ner_data_loader(dataset, batch_size=2, task='train', auto=False):
     train for training using RandomSampler
     test for evaluation and prediction using SequentialSampler
 
-    if set auto to True we will defaultly call convert_features_to_tensors, so features can be directly passed into the function
+    if set auto to True we will default call convert_features_to_tensors,
+    so features can be directly passed into the function
     """
     if auto:
         dataset = convert_features_to_tensors(dataset)
+
+    if len(dataset) < 1:
+        return DataLoader(dataset)
 
     if task == 'train':
         sampler = RandomSampler(dataset)
