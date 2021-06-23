@@ -51,17 +51,21 @@ def main(args):
 
     # fids = [each.stem.split(".")[0] for each in Path(args.preprocessed_text_dir).glob("*.txt")]
     for each_file in Path(args.preprocessed_text_dir).glob("*.txt"):
-        test_example = ner_data_processor.get_test_examples(file_name=each_file.name)
-        test_features = transformer_convert_data_to_features(args=args,
-                                                             input_examples=test_example,
-                                                             label2idx=label2idx,
-                                                             tokenizer=tokenizer,
-                                                             max_seq_len=args.max_seq_length)
-        predictions = predict(args, model, test_features)
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-        ofn = each_file.stem.split(".")[0] + ".bio.txt"
-        args.predict_output_file = os.path.join(args.output_dir, ofn)
-        _output_bio(args, test_example, predictions)
+        try:
+            test_example = ner_data_processor.get_test_examples(file_name=each_file.name)
+            test_features = transformer_convert_data_to_features(args=args,
+                                                                 input_examples=test_example,
+                                                                 label2idx=label2idx,
+                                                                 tokenizer=tokenizer,
+                                                                 max_seq_len=args.max_seq_length)
+            predictions = predict(args, model, test_features)
+            Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+            ofn = each_file.stem.split(".")[0] + ".bio.txt"
+            args.predict_output_file = os.path.join(args.output_dir, ofn)
+            _output_bio(args, test_example, predictions)
+        except Exception as ex:
+            args.logger.error(f"Encountered an error when processing predictions for file: {each_file.name}")
+            args.logger.error(traceback.format_exc())
 
     if args.do_format:
         base_path = Path(args.output_dir)
@@ -116,7 +120,4 @@ if __name__ == '__main__':
     global_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info("Task will use cuda device: GPU_{}.".format(torch.cuda.current_device()) if torch.cuda.device_count() else 'Task will use CPU.')
 
-    try:
-        main(global_args)
-    except Exception as ex:
-        logger.error(traceback.format_exc())
+    main(global_args)
