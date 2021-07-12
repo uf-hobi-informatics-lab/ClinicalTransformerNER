@@ -357,15 +357,15 @@ def load_exclude_tags(fn):
     tag_list = []
     with open(fn, "r") as f:
         for line in f.readlines():
-            tag_list.append(line.strip)
-    return tag_list
+            tag_list.append(line.strip())
+    return set(tag_list)
 
 
 def main(targs):
     bio_eval = BioEval()
-    if targs.exlude and Path(targs.exlude).is_file():
-        exlude_tags = load_exclude_tags(targs.exlude)
-        bio_eval.add_labels_not_for_eval(*exlude_tags)
+    if targs.exclude and Path(targs.exclude).is_file():
+        exclude_tags = load_exclude_tags(targs.exclude)
+        bio_eval.add_labels_not_for_eval(*exclude_tags)
     bio_eval.set_beta_for_f_score(beta=targs.beta)
     bio_eval.eval_file(gs_file=targs.file1, pred_file=targs.file2)
     bio_eval.show_evaluation()
@@ -390,7 +390,7 @@ if __name__ == '__main__':
     parser.add_argument("-f1", "--file1", required=True, help="gold standard")
     parser.add_argument("-f2", "--file2", required=True, help="prediction")
     parser.add_argument("-b", "--beta", default=1, type=int, help="f-score beta")
-    parser.add_argument("-e", "--exlude", default=None, type=str, help="a file with list of tags not for evaluation")
+    parser.add_argument("-e", "--exclude", default=None, type=str, help="a file with list of tags not for evaluation")
     args = parser.parse_args()
 
     if args.mode == "main":

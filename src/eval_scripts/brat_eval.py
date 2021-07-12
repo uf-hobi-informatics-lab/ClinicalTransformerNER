@@ -118,7 +118,7 @@ class RecordTrack2(object):
                         print(line)
                     tag_start, tag_end = int(tag_start), int(tag_end)
                     # add exclude tag function
-                    if self.tags_to_exclude and tag_type in self.tags_to_exclude:
+                    if self.tags_to_exclude and tag_type.lower() in self.tags_to_exclude:
                         continue
                     annotations['tags'][tag_id] = ClinicalConcept(tag_id, tag_start, tag_end, tag_type, tag_text)
             for line_num, line in enumerate(lines):
@@ -492,7 +492,7 @@ def load_exclude_tags(fn):
     tag_list = []
     with open(fn, "r") as f:
         for line in f.readlines():
-            tag_list.append(line.strip())
+            tag_list.append(line.strip().lower())
     return set(tag_list)
 
 
