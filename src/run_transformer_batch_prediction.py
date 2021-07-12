@@ -118,6 +118,7 @@ if __name__ == '__main__':
     global_args.logger = logger
     # device
     global_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info("Task will use cuda device: GPU_{}.".format(torch.cuda.current_device()) if torch.cuda.device_count() else 'Task will use CPU.')
+    logger.info("Task will use cuda device: GPU_{}.".format(torch.cuda.current_device())
+                if torch.cuda.device_count() else 'Task will use CPU.')
 
     main(global_args)
