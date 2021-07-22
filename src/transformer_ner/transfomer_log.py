@@ -16,5 +16,6 @@ class TransformerNERLogger:
         self.lvl = logger_level
 
     def get_logger(self):
-        Path(self.lf).parent.mkdir(parents=True, exist_ok=True)
+        if self.lf:
+            Path(self.lf).parent.mkdir(parents=True, exist_ok=True)
         return create_logger("Transformer_NER", log_level=self.lvl, set_file=self.lf)

@@ -22,7 +22,31 @@ from transformers import (BertConfig,  BertModel, BertPreTrainedModel,
                           RobertaForTokenClassification, LongformerForTokenClassification, LongformerModel,
                           DebertaModel, DebertaPreTrainedModel)
 from torch import nn
+import torch.nn.functional as F
 import torch
+
+
+class Biaffine(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+
+class FocalLoss(nn.Module):
+    def __init__(self, weight=None, gamma=2., reduction='mean'):
+        super(FocalLoss, self).__init__()
+        self.weight = weight
+        self.gamma = gamma
+        self.reduction = reduction
+
+    def forward(self, input_tensor, target_tensor):
+        log_prob = F.log_softmax(input_tensor, dim=-1)
+        prob = torch.exp(log_prob)
+        return F.nll_loss(
+            ((1 - prob) ** self.gamma) * log_prob,
+            target_tensor,
+            weight=self.weight,
+            reduction=self.reduction
+        )
 
 
 class Transformer_CRF(nn.Module):
@@ -40,8 +64,8 @@ class Transformer_CRF(nn.Module):
     @staticmethod
     def log_sum_exp_batch(log_Tensor, axis=-1):
         # shape (batch_size,n,m)
-        return torch.max(log_Tensor, axis)[0] + \
-               torch.log(torch.exp(log_Tensor - torch.max(log_Tensor, axis)[0].view(log_Tensor.shape[0], -1, 1)).sum(axis))
+        sum_score = torch.exp(log_Tensor - torch.max(log_Tensor, axis)[0].view(log_Tensor.shape[0], -1, 1)).sum(axis)
+        return torch.max(log_Tensor, axis)[0] + torch.log(sum_score)
 
     def reset_layers(self):
         self.log_alpha = self.log_alpha.fill_(0.)
@@ -54,12 +78,6 @@ class Transformer_CRF(nn.Module):
         forward_score = self._forward_alg(feats)
         max_logLL_allz_allx, path, gold_score = self._crf_decode(feats, label_ids)
         loss = torch.mean(forward_score - gold_score)
-        ####
-        # print(forward_score)
-        # print(gold_score)
-        # print(max_logLL_allz_allx)
-        # print(path)
-        ####
         self.reset_layers()
         return path, max_logLL_allz_allx, loss
 
@@ -87,9 +105,10 @@ class Transformer_CRF(nn.Module):
         psi = self.psi.expand(batch_size, seq_size, self.num_labels).clone()
 
         for t in range(1, seq_size):
-            score = score + \
-                    batch_transitions.gather(-1, (label_ids[:, t] * self.num_labels + label_ids[:, t-1]).view(-1, 1)) + \
-                    feats[:, t].gather(-1, label_ids[:, t].view(-1, 1)).view(-1, 1)
+            batch_trans_score = batch_transitions.gather(
+                -1, (label_ids[:, t] * self.num_labels + label_ids[:, t-1]).view(-1, 1))
+            temp_score = feats[:, t].gather(-1, label_ids[:, t].view(-1, 1)).view(-1, 1)
+            score = score + batch_trans_score + temp_score
 
             log_delta, psi[:, t] = torch.max(self.transitions + log_delta, -1)
             log_delta = (log_delta + feats[:, t]).unsqueeze(1)
@@ -103,6 +122,7 @@ class Transformer_CRF(nn.Module):
         return max_logLL_allz_allx, path, score
 
 
+@DeprecationWarning
 class BertLikeNerModel(PreTrainedModel):
     """not fit for the current training; but can be integrated into new APP"""
     CONF_REF = {
@@ -179,12 +199,18 @@ class BertNerModel(BertPreTrainedModel):
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        self.loss_fct = nn.CrossEntropyLoss()
+
+        if config.use_focal_loss:
+            self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
+        else:
+            self.loss_fct = nn.CrossEntropyLoss()
+
         self.use_crf = config.use_crf
         if self.use_crf:
             self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
         else:
             self.crf_layer = None
+
         self.init_weights()
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, label_ids=None):
@@ -226,7 +252,10 @@ class RobertaNerModel(BertPreTrainedModel):
         self.roberta = RobertaModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        self.loss_fct = nn.CrossEntropyLoss()
+        if config.use_focal_loss:
+            self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
+        else:
+            self.loss_fct = nn.CrossEntropyLoss()
         self.use_crf = config.use_crf
         if self.use_crf:
             self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
@@ -281,7 +310,10 @@ class LongformerNerModel(LongformerForTokenClassification):
         self.longformer = LongformerModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        self.loss_fct = nn.CrossEntropyLoss()
+        if config.use_focal_loss:
+            self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
+        else:
+            self.loss_fct = nn.CrossEntropyLoss()
         self.use_crf = config.use_crf
         if self.use_crf:
             self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
@@ -340,7 +372,10 @@ class AlbertNerModel(AlbertPreTrainedModel):
         self.albert = AlbertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        self.loss_fct = nn.CrossEntropyLoss()
+        if config.use_focal_loss:
+            self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
+        else:
+            self.loss_fct = nn.CrossEntropyLoss()
         self.use_crf = config.use_crf
         if self.use_crf:
             self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
@@ -386,7 +421,10 @@ class DistilBertNerModel(BertPreTrainedModel):
         self.distilbert = DistilBertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        self.loss_fct = nn.CrossEntropyLoss()
+        if config.use_focal_loss:
+            self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
+        else:
+            self.loss_fct = nn.CrossEntropyLoss()
         self.use_crf = config.use_crf
         if self.use_crf:
             self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
@@ -426,7 +464,10 @@ class XLNetNerModel(XLNetForTokenClassification):
         self.xlnet = XLNetModel(config)
         self.classifier = nn.Linear(config.d_model, self.num_labels)
         self.dropout = nn.Dropout(config.dropout)
-        self.loss_fct = nn.CrossEntropyLoss()
+        if config.use_focal_loss:
+            self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
+        else:
+            self.loss_fct = nn.CrossEntropyLoss()
         self.use_crf = config.use_crf
         if self.use_crf:
             raise Warning("Not support CRF for XLNet for now.")
@@ -497,7 +538,10 @@ class BartNerModel(PreTrainedModel):
         self.bart = BartModel(config)
         self.dropout = nn.Dropout(config.dropout)
         self.classifier = nn.Linear(config.d_model, config.num_labels)
-        self.loss_fct = nn.CrossEntropyLoss()
+        if config.use_focal_loss:
+            self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
+        else:
+            self.loss_fct = nn.CrossEntropyLoss()
         self.use_crf = config.use_crf
         if self.use_crf:
             self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
@@ -568,7 +612,10 @@ class ElectraNerModel(ElectraForTokenClassification):
         self.electra = ElectraModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        self.loss_fct = nn.CrossEntropyLoss()
+        if config.use_focal_loss:
+            self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
+        else:
+            self.loss_fct = nn.CrossEntropyLoss()
         self.use_crf = config.use_crf
         if self.use_crf:
             self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
@@ -623,7 +670,10 @@ class DeBertaNerModel(DebertaPreTrainedModel):
         self.deberta = DebertaModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        self.loss_fct = nn.CrossEntropyLoss()
+        if config.use_focal_loss:
+            self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
+        else:
+            self.loss_fct = nn.CrossEntropyLoss()
         self.use_crf = config.use_crf
         if self.use_crf:
             self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
