@@ -154,4 +154,5 @@ please cite our paper:
 - https://transformer-models.s3.amazonaws.com/mimiciii_roberta_10e_128b.zip
 - https://transformer-models.s3.amazonaws.com/mimiciii_xlnet_5e_128b.zip
 - https://transformer-models.s3.amazonaws.com/mimiciii_deberta_10e_128b.tar.gz
+- https://transformer-models.s3.amazonaws.com/mimiciii_longformer_5e_128b.zip
 > note: all model pretraining tasks were done with the scripts at https://github.com/huggingface/transformers/tree/master/examples/language-modeling with a few customization.
