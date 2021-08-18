@@ -113,6 +113,12 @@ python ./src/run_transformer_batch_prediction.py \
 ####
 ```
 
+## Tutorial
+> we add two tutorial in the tutorial directory
+- brat2bio.ipynb is an example on how to write code to covert brat format annotation to BIO format which used for training and test 
+- pipeline_preprocessing_training_prediction.ipynb is a full pipeline example from data preprocessing to training to prediction to evaluation
+- note: in full pipeline example, we used our NLPreprocessing package which is customized for clinical notes but may have issues if the notes have some unique format in it.
+
 ## Wiki for all parameters
 [wiki](https://github.com/uf-hobi-informatics-lab/ClinicalTransformerNER/wiki/Parameters)
 
