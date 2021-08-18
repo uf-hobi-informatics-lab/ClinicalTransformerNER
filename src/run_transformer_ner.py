@@ -6,6 +6,7 @@ import torch
 from transformer_ner.task import run_task
 from transformer_ner.transfomer_log import TransformerNERLogger
 from traceback import format_exc
+import warnings
 
 from packaging import version
 import transformers
@@ -61,7 +62,8 @@ def main():
     parser.add_argument("--eval_batch_size", default=8, type=int,
                         help="The batch size for eval.")
     parser.add_argument('--train_steps', type=int, default=-1,
-                        help="Number of trianing steps between two evaluations on the dev set; if <0 then evaluate after each epoch")
+                        help="Number of trianing steps between two evaluations on the dev set; "
+                             "if <0 then evaluate after each epoch")
     parser.add_argument("--learning_rate", default=1e-5, type=float,
                         help="The initial learning rate for Adam.")
     parser.add_argument("--num_train_epochs", default=10, type=float,
@@ -87,9 +89,13 @@ def main():
     parser.add_argument("--progress_bar", action='store_true',
                         help="show progress during the training in tqdm")
     parser.add_argument("--early_stop", default=-1, type=int,
-                        help="""The training will stop after num of epoch without performance improvement. If set to 0 or -1, then not use early stop.""")
-
-    # fp16 and distributed training
+                        help="""The training will stop after num of epoch without performance improvement. 
+                        If set to 0 or -1, then not use early stop.""")
+    parser.add_argument('--focal_loss', action='store_true',
+                        help="use focal loss function instead of cross entropy loss")
+    parser.add_argument("--focal_loss_gamma", default=2, type=int,
+                        help="the gamma hyperparameter in focal loss, commonly use 1 or 2")
+    # fp16 and distributed training (we use pytorch naive implementation instead of Apex)
     parser.add_argument('--fp16', action='store_true',
                         help="Whether to use 16-bit float precision instead of 32-bit")
     # parser.add_argument("--fp16_opt_level", type=str, default="O1",
@@ -121,6 +127,11 @@ def main():
 
     if global_args.do_predict and not global_args.predict_output_file:
         raise RuntimeError("Running prediction but predict output file is not set.")
+
+    if global_args.focal_loss and global_args.use_crf:
+        warnings.warn("Using CRF cannot apply focal loss. CRF has its own loss function.")
+        warnings.warn("We will overwrite focal loss to false and use CRF as default.")
+        global_args.focal_loss = False
 
     try:
         run_task(global_args)

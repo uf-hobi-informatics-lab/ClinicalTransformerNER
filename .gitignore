@@ -4,3 +4,4 @@
 __pycahce__
 new_ner_model
 /.python-version
+*/.ipynb_checkpoints

@@ -517,6 +517,8 @@ def run_task(args):
         config = model_config.from_pretrained(args.config_name, num_labels=num_labels)
         config.use_crf = args.use_crf
         config.label2idx = args.label2idx
+        config.use_focal_loss = args.focal_loss
+        config.focal_loss_gamma = args.focal_loss_gamma
         args.logger.info("New Model Config:\n{}".format(config))
 
         if args.pretrained_model == "microsoft/deberta-xlarge-v2":

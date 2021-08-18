@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 
-# from common_utils.common_io import load_bio_file_into_sents
 from itertools import chain
 from collections import defaultdict
-# from common_utils.common_log import create_logger
 from math import pow
 from pathlib import Path
 import argparse
@@ -355,14 +353,22 @@ class BioEval:
         print(report)
 
 
+def load_exclude_tags(fn):
+    tag_list = []
+    with open(fn, "r") as f:
+        for line in f.readlines():
+            tag_list.append(line.strip())
+    return set(tag_list)
+
+
 def main(targs):
     bio_eval = BioEval()
+    if targs.exclude and Path(targs.exclude).is_file():
+        exclude_tags = load_exclude_tags(targs.exclude)
+        bio_eval.add_labels_not_for_eval(*exclude_tags)
     bio_eval.set_beta_for_f_score(beta=targs.beta)
     bio_eval.eval_file(gs_file=targs.file1, pred_file=targs.file2)
     bio_eval.show_evaluation()
-    # from pprint import pprint
-    # pprint(bio_eval.counts, indent=1)
-    # pprint(bio_eval.performance, indent=1)
 
 
 def test():
@@ -375,27 +381,7 @@ def test():
     b = [['O', 'O', 'B-misc', 'O', 'O', 'B-misc', 'I-misc', 'O', 'O', 'B-misc', 'O']]
     bio_eval = BioEval()
     bio_eval.eval_mem(a, b, do_flat=False)
-    # pprint(bio_eval.counts, indent=1)
-    # pprint(bio_eval.performance, indent=1)
     bio_eval.show_evaluation()
-
-    # print(classification_report(a, b, mode='relax'))
-    # bio_eval.set_beta_for_f_score(2)  # measure F2-score (favor recall)
-    # bio_eval.eval_mem(a, b, do_flat=False)
-    # pprint(bio_eval.counts, indent=1)
-    # pprint(bio_eval.performance, indent=1)
-    #
-    # # test with file
-    # gs_file = Path(__file__).resolve().parent.parent.parent / "test_data/bio_eval/gs.txt"
-    # pred_file = Path(__file__).resolve().parent.parent.parent / "test_data/bio_eval/pred.txt"
-    # bio_eval = BioEval()
-    # bio_eval.eval_file(gs_file, pred_file)
-    #
-    # # compare to the test_data/expect.txt
-    # pprint(bio_eval.get_counts(), indent=1)
-    # pprint(bio_eval.get_performance(), indent=1)
-    #
-    # bio_eval.show_evaluation()
 
 
 if __name__ == '__main__':
@@ -404,10 +390,10 @@ if __name__ == '__main__':
     parser.add_argument("-f1", "--file1", required=True, help="gold standard")
     parser.add_argument("-f2", "--file2", required=True, help="prediction")
     parser.add_argument("-b", "--beta", default=1, type=int, help="f-score beta")
+    parser.add_argument("-e", "--exclude", default=None, type=str, help="a file with list of tags not for evaluation")
     args = parser.parse_args()
 
     if args.mode == "main":
         main(args)
     else:
         test()
-    # test()

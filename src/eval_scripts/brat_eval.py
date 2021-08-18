@@ -81,10 +81,11 @@ class Relation(object):
 class RecordTrack2(object):
     """Record for Track 2 class."""
 
-    def __init__(self, file_path):
+    def __init__(self, file_path, tags_to_exclude=None):
         """Initialize."""
         self.path = os.path.abspath(file_path)
         self.basename = os.path.basename(self.path)
+        self.tags_to_exclude = tags_to_exclude
         self.annotations = self._get_annotations()
 
     @property
@@ -116,6 +117,9 @@ class RecordTrack2(object):
                         print(self.path)
                         print(line)
                     tag_start, tag_end = int(tag_start), int(tag_end)
+                    # add exclude tag function
+                    if self.tags_to_exclude and tag_type.lower() in self.tags_to_exclude:
+                        continue
                     annotations['tags'][tag_id] = ClinicalConcept(tag_id, tag_start, tag_end, tag_type, tag_text)
             for line_num, line in enumerate(lines):
                 if line.strip().startswith('R'):
@@ -442,7 +446,7 @@ def evaluate(corpora, annotations, mode='strict', verbose=False):
 
 
 class Corpora(object):
-    def __init__(self, folder1, folder2):
+    def __init__(self, folder1, folder2, tags_to_exclude=None):
         file_ext = '*.ann'
         self.folder1 = folder1
         self.folder2 = folder2
@@ -460,8 +464,8 @@ class Corpora(object):
                 print(', '.join(sorted(list(files2 - common_files))))
         self.docs = []
         for file in common_files:
-            g = RecordTrack2(os.path.join(self.folder1, file))
-            s = RecordTrack2(os.path.join(self.folder2, file))
+            g = RecordTrack2(os.path.join(self.folder1, file), tags_to_exclude)
+            s = RecordTrack2(os.path.join(self.folder2, file), tags_to_exclude)
             self.docs.append((g, s))
 
     def get_annotations(self):
@@ -476,12 +480,20 @@ class Corpora(object):
         return sorted(gs_tags, key=lambda x: len(x)), sorted(gs_rels, key=lambda x: len(x))
 
 
-def eval_files(f1, f2, verbose):
+def eval_files(f1, f2, verbose, tags_to_exclude=None):
     """Where the magic begins."""
-    corpora = Corpora(f1, f2)
+    corpora = Corpora(f1, f2, tags_to_exclude)
     annotations = corpora.get_annotations()
     if corpora.docs:
         evaluate(corpora, annotations, verbose=verbose)
+
+
+def load_exclude_tags(fn):
+    tag_list = []
+    with open(fn, "r") as f:
+        for line in f.readlines():
+            tag_list.append(line.strip().lower())
+    return set(tag_list)
 
 
 if __name__ == '__main__':
@@ -489,5 +501,9 @@ if __name__ == '__main__':
     parser.add_argument('--f1', help='First data folder path (gold)')
     parser.add_argument('--f2', help='Second data folder path (system)')
     parser.add_argument('-v', '--verbose', default=0, help='verbosity')
+    parser.add_argument('-e', '--exclude', default=None, type=str, help='a file with all tags you do not want to eval')
     args = parser.parse_args()
-    eval_files(os.path.abspath(args.f1), os.path.abspath(args.f2), int(args.verbose))
+    exclude_tags = None
+    if args.exclude and os.path.exists(args.exclude):
+        exclude_tags = load_exclude_tags(args.exclude)
+    eval_files(os.path.abspath(args.f1), os.path.abspath(args.f2), int(args.verbose), exclude_tags)
