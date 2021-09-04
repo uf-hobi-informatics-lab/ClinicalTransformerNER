@@ -25,28 +25,12 @@ from torch import nn
 import torch.nn.functional as F
 import torch
 
+from model_utils import FocalLoss
+
 
 class Biaffine(nn.Module):
     def __init__(self):
         super().__init__()
-
-
-class FocalLoss(nn.Module):
-    def __init__(self, weight=None, gamma=2., reduction='mean'):
-        super(FocalLoss, self).__init__()
-        self.weight = weight
-        self.gamma = gamma
-        self.reduction = reduction
-
-    def forward(self, input_tensor, target_tensor):
-        log_prob = F.log_softmax(input_tensor, dim=-1)
-        prob = torch.exp(log_prob)
-        return F.nll_loss(
-            ((1 - prob) ** self.gamma) * log_prob,
-            target_tensor,
-            weight=self.weight,
-            reduction=self.reduction
-        )
 
 
 class Transformer_CRF(nn.Module):
