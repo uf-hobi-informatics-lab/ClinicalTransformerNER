@@ -95,6 +95,11 @@ def main():
                         help="use focal loss function instead of cross entropy loss")
     parser.add_argument("--focal_loss_gamma", default=2, type=int,
                         help="the gamma hyperparameter in focal loss, commonly use 1 or 2")
+    parser.add_argument("--use_biaffine", action='store_true',
+                        help="Whether to use biaffine for NER (https://www.aclweb.org/anthology/2020.acl-main.577/).")
+    parser.add_argument("--mlp_dim", default=128, type=int,
+                        help="The dimension for MLP layer in biaffine module, default to 128."
+                             "If set this value <= 0, we use transformer model hidden layer dimension")
     # fp16 and distributed training (we use pytorch naive implementation instead of Apex)
     parser.add_argument('--fp16', action='store_true',
                         help="Whether to use 16-bit float precision instead of 32-bit")
@@ -114,7 +119,8 @@ def main():
     # set and check cuda (we recommend to set up CUDA device in shell)
     # os.environ['CUDA_VISIBLE_DEVICES'] = global_args.cuda_ids
     global_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info("Task will use cuda device: GPU_{}.".format(torch.cuda.current_device()) if torch.cuda.device_count() else 'Task will use CPU.')
+    logger.info("Task will use cuda device: GPU_{}.".format(
+        torch.cuda.current_device()) if torch.cuda.device_count() else 'Task will use CPU.')
 
     # if args.tokenizer_name and args.config_name are not specially set, set them as pretrained_model
     if not global_args.tokenizer_name:
@@ -129,9 +135,13 @@ def main():
         raise RuntimeError("Running prediction but predict output file is not set.")
 
     if global_args.focal_loss and global_args.use_crf:
-        warnings.warn("Using CRF cannot apply focal loss. CRF has its own loss function.")
+        warnings.warn(
+            "Using CRF cannot apply focal loss. CRF use viterbi decoding and loss will be calculated independently.")
         warnings.warn("We will overwrite focal loss to false and use CRF as default.")
         global_args.focal_loss = False
+
+    if global_args.use_crf and global_args.use_biaffine:
+        raise RuntimeError("You can not run both CRF and biaffine. Choose only one or None of them to proceed.")
 
     try:
         run_task(global_args)

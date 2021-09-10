@@ -402,3 +402,8 @@ def batch_to_model_inputs(batch, model_type='bert'):
         raise RuntimeError(f"{model_type} is not a valid model type")
 
     return inputs
+
+
+class TransformerNerBiaffineDataProcessor(object):
+    def __init__(self):
+        pass

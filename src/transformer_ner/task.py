@@ -515,6 +515,8 @@ def run_task(args):
             tokenizer = model_tokenizer.from_pretrained(args.tokenizer_name, do_lower_case=args.do_lower_case)
         tokenizer.add_tokens(NEXT_TOKEN)
         config = model_config.from_pretrained(args.config_name, num_labels=num_labels)
+        config.mlp_dim = args.mlp_dim
+        config.use_biaffine = args.use_biaffine
         config.use_crf = args.use_crf
         config.label2idx = args.label2idx
         config.use_focal_loss = args.focal_loss

@@ -1,9 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+
 """
-We tried to implement a common class BertLikeNER for BERT, ROBERTA, ALBERT, DISTILBERT
-to share the common forward() function;
-However, such implementation will dramatically influence the model converge process.
 The current implementation has repeated code but will guarantee the performance for each model.
 """
 
@@ -25,19 +23,100 @@ from torch import nn
 import torch.nn.functional as F
 import torch
 
-from model_utils import FocalLoss
+from model_utils import FocalLoss, _calculate_loss
+
+
+class MLP(nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_dim=0, num_hidden_layers=0):
+        super().__init__()
+        self.weight = None
+        # TODO: test Relu and LeakyRelu (negative_slope=0.1) besides GELU as linear activation
+        # TODO: test if dropout need (SharedDropout)
+        if num_hidden_layers and hidden_dim:
+            # if num_hidden_layers = 1, then we have two layers
+            layers = []
+            for i in range(num_hidden_layers):
+                if i == 0:
+                    layers.append(nn.Linear(input_dim, hidden_dim))
+                else:
+                    layers.append(nn.Linear(hidden_dim, hidden_dim))
+                # should test Relu and LeakyRelu (negative_slope=0.1)
+                layers.append(nn.GELU())
+            self.weight = nn.Sequential(*layers, nn.Linear(hidden_dim, output_dim), nn.GELU())
+        else:
+            # only one linear layer
+            self.weight = nn.Sequential(nn.Linear(input_dim, output_dim), nn.GELU())
+
+    def forward(self, x):
+        return self.weight(x)
 
 
 class Biaffine(nn.Module):
-    def __init__(self):
+    def __init__(self, input_dim, output_dim, bias_x=True, bias_y=True):
         super().__init__()
+        self.bx = bias_x
+        self.by = bias_y
+        self.U = torch.nn.Parameter(
+            torch.Tensor(input_dim + int(bias_x), output_dim, input_dim + int(bias_y)))
+        # TODO: use normal init; we can test other init method: xavier, kaiming, ones
+        nn.init.normal_(self.U)
+
+    def forward(self, x, y):
+        # add bias
+        if self.bx:
+            x = torch.cat([x, torch.ones_like(x[..., :1])], dim=-1)
+        if self.by:
+            y = torch.cat([y, torch.ones_like(y[..., :1])], dim=-1)
+
+        """
+        t1: [b, s, v]
+        t2: [b, s, v]
+        U: [v, o, v]
+
+        m = t1*U => [b,s,o,v] => [b, s*o, v]
+        m*t2.T => [b, s*o, v] * [b, v, s] => [b, s, o, s] => [b, s, s, o]: this is the mapping table
+        """
+        biaffine_mappings = torch.einsum('bxi,ioj,byj->bxyo', x, self.U, y)
+
+        return biaffine_mappings
+
+
+class BiaffineNER(nn.Module):
+    """
+        ref:
+            https://aclanthology.org/2020.acl-main.577.pdf
+            https://github.com/geasyheart/biaffine_ner.git
+    """
+    def __init__(self, config):
+        super().__init__()
+        # TODO: option to use both bert output last and second last hidden states
+        # mlp_input_dim = config.hidden_size if config.include_only_bert_last_hidden else config.hidden_size*2
+        mlp_input_dim = config.hidden_size
+        mlp_output_dim = config.mlp_dim if config.mlp_dim > 0 else config.hidden_size
+        self.ffnns = MLP(mlp_input_dim, mlp_output_dim)  # ffnns: feed forward neural network start
+        self.ffnne = MLP(mlp_input_dim, mlp_output_dim)  # ffnne: feed forward neural network end
+        self.biaffine = Biaffine(mlp_output_dim, config.num_labels)
+        self.num_labels = config.num_labels
+        if config.use_focal_loss:
+            self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
+        else:
+            self.loss_fct = nn.CrossEntropyLoss()
+
+    def forward(self, x, attention_mask=None, label_ids=None):
+        s_logits = self.ffnns(x)
+        e_logits = self.ffnne(x)
+        logits = self.biaffine(s_logits, e_logits)
+
+        loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
+
+        return logits, active_logits, loss
 
 
 class Transformer_CRF(nn.Module):
-    def __init__(self, num_labels, start_label_id):
+    def __init__(self, config):
         super().__init__()
-        self.num_labels = num_labels
-        self.start_label_id = start_label_id
+        self.num_labels = config.num_labels
+        self.start_label_id = config.label2idx['CLS']
         self.transitions = nn.Parameter(torch.randn(self.num_labels, self.num_labels), requires_grad=True)
         self.log_alpha = nn.Parameter(torch.zeros(1, 1, 1), requires_grad=False)
         self.score = nn.Parameter(torch.zeros(1, 1), requires_grad=False)
@@ -106,68 +185,6 @@ class Transformer_CRF(nn.Module):
         return max_logLL_allz_allx, path, score
 
 
-@DeprecationWarning
-class BertLikeNerModel(PreTrainedModel):
-    """not fit for the current training; but can be integrated into new APP"""
-    CONF_REF = {
-        'bert': (BertConfig, ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST, 'bert'),
-        'roberta': (RobertaConfig, ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST, 'roberta'),
-        'albert': (AlbertConfig, ALBERT_PRETRAINED_MODEL_ARCHIVE_LIST, 'albert')
-    }
-
-    def __init__(self, config, model_type):
-        super().__init__(config)
-        self.model_type = model_type
-        self.num_labels = config.num_labels
-        self.model = None
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        self.loss_fct = nn.CrossEntropyLoss()
-        self.use_crf = config.use_crf
-        if self.use_crf:
-            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
-        else:
-            self.crf_layer = None
-        self.__prepare_model_instance(config)
-        self.init_weights()
-
-    def __prepare_model_instance(self, config):
-        self.config_class, self.pretrained_model_archive_map, self.base_model_prefix = self.CONF_REF[self.model_type]
-        if self.model_type == "bert":
-            self.model = BertModel(config)
-        elif self.model_type == 'roberta':
-            self.model = RobertaModel(config)
-        elif self.model_type == 'albert':
-            self.model = AlbertModel(config)
-
-    def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, label_ids=None):
-        outputs = self.model(input_ids,
-                             attention_mask=attention_mask,
-                             token_type_ids=token_type_ids,
-                             position_ids=position_ids,
-                             head_mask=head_mask)
-
-        sequence_output = outputs[0]
-        sequence_output = self.dropout(sequence_output)
-        logits = self.classifier(sequence_output)
-
-        if self.use_crf:
-            logits, active_logits, loss = self.crf_layer(logits, label_ids)
-        else:
-            if attention_mask is not None:
-                active_idx = attention_mask.view(-1) == 1
-                active_logits = logits.view(-1, self.num_labels)[active_idx]
-                active_labels = label_ids.view(-1)[active_idx]
-            else:
-                active_logits = logits.view(-1, self.num_labels)
-                active_labels = label_ids.view(-1)
-
-            # loss_fct = nn.CrossEntropyLoss()  # CrossEntropyLoss has log_softmax operation inside
-            loss = self.loss_fct(active_logits, active_labels)
-
-        return logits, active_logits, loss
-
-
 class BertNerModel(BertPreTrainedModel):
     """
     model architecture:
@@ -190,10 +207,10 @@ class BertNerModel(BertPreTrainedModel):
             self.loss_fct = nn.CrossEntropyLoss()
 
         self.use_crf = config.use_crf
-        if self.use_crf:
-            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
-        else:
-            self.crf_layer = None
+        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+
+        self.use_biaffine = config.use_biaffine
+        self.biaffine = BiaffineNER(config) if self.use_biaffine else None
 
         self.init_weights()
 
@@ -210,17 +227,20 @@ class BertNerModel(BertPreTrainedModel):
 
         if self.use_crf:
             logits, active_logits, loss = self.crf_layer(logits, label_ids)
+        elif self.use_biaffine:
+            logits, active_logits, loss = self.biaffine(sequence_output, attention_mask, label_ids)
         else:
-            if attention_mask is not None:
-                active_idx = attention_mask.view(-1) == 1
-                active_logits = logits.view(-1, self.num_labels)[active_idx]
-                active_labels = label_ids.view(-1)[active_idx]
-            else:
-                active_logits = logits.view(-1, self.num_labels)
-                active_labels = label_ids.view(-1)
-
-            # loss_fct = nn.CrossEntropyLoss()
-            loss = self.loss_fct(active_logits, active_labels)
+            # if attention_mask is not None:
+            #     active_idx = attention_mask.view(-1) == 1
+            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
+            #     active_labels = label_ids.view(-1)[active_idx]
+            # else:
+            #     active_logits = logits.view(-1, self.num_labels)
+            #     active_labels = label_ids.view(-1)
+            #
+            # # loss_fct = nn.CrossEntropyLoss()
+            # loss = self.loss_fct(active_logits, active_labels)
+            loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
 
@@ -236,15 +256,18 @@ class RobertaNerModel(BertPreTrainedModel):
         self.roberta = RobertaModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+
         if config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
+
         self.use_crf = config.use_crf
-        if self.use_crf:
-            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
-        else:
-            self.crf_layer = None
+        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+
+        self.use_biaffine = config.use_biaffine
+        self.biaffine = BiaffineNER(config) if self.use_biaffine else None
+
         self.init_weights()
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, label_ids=None):
@@ -272,16 +295,19 @@ class RobertaNerModel(BertPreTrainedModel):
 
         if self.use_crf:
             logits, active_logits, loss = self.crf_layer(logits, label_ids)
+        elif self.use_biaffine:
+            logits, active_logits, loss = self.biaffine(seq_outputs, attention_mask, label_ids)
         else:
-            if attention_mask is not None:
-                active_idx = attention_mask.view(-1) == 1
-                active_logits = logits.view(-1, self.num_labels)[active_idx]
-                active_labels = label_ids.view(-1)[active_idx]
-            else:
-                active_logits = logits.view(-1, self.num_labels)
-                active_labels = label_ids.view(-1)
-
-            loss = self.loss_fct(active_logits, active_labels)
+            # if attention_mask is not None:
+            #     active_idx = attention_mask.view(-1) == 1
+            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
+            #     active_labels = label_ids.view(-1)[active_idx]
+            # else:
+            #     active_logits = logits.view(-1, self.num_labels)
+            #     active_labels = label_ids.view(-1)
+            #
+            # loss = self.loss_fct(active_logits, active_labels)
+            loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
 
@@ -294,15 +320,18 @@ class LongformerNerModel(LongformerForTokenClassification):
         self.longformer = LongformerModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+
         if config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
+
         self.use_crf = config.use_crf
-        if self.use_crf:
-            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
-        else:
-            self.crf_layer = None
+        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+
+        self.use_biaffine = config.use_biaffine
+        self.biaffine = BiaffineNER(config) if self.use_biaffine else None
+
         self.init_weights()
 
     def forward(self,
@@ -330,17 +359,20 @@ class LongformerNerModel(LongformerForTokenClassification):
 
         if self.use_crf:
             logits, active_logits, loss = self.crf_layer(logits, label_ids)
+        elif self.use_biaffine:
+            logits, active_logits, loss = self.biaffine(sequence_output, attention_mask, label_ids)
         else:
-            if attention_mask is not None:
-                active_idx = attention_mask.view(-1) == 1
-                active_logits = logits.view(-1, self.num_labels)[active_idx]
-                active_labels = label_ids.view(-1)[active_idx]
-            else:
-                active_logits = logits.view(-1, self.num_labels)
-                active_labels = label_ids.view(-1)
-
-            # loss_fct = nn.CrossEntropyLoss()
-            loss = self.loss_fct(active_logits, active_labels)
+            # if attention_mask is not None:
+            #     active_idx = attention_mask.view(-1) == 1
+            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
+            #     active_labels = label_ids.view(-1)[active_idx]
+            # else:
+            #     active_logits = logits.view(-1, self.num_labels)
+            #     active_labels = label_ids.view(-1)
+            #
+            # # loss_fct = nn.CrossEntropyLoss()
+            # loss = self.loss_fct(active_logits, active_labels)
+            loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
 
@@ -356,15 +388,18 @@ class AlbertNerModel(AlbertPreTrainedModel):
         self.albert = AlbertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+
         if config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
+
         self.use_crf = config.use_crf
-        if self.use_crf:
-            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
-        else:
-            self.crf_layer = None
+        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+
+        self.use_biaffine = config.use_biaffine
+        self.biaffine = BiaffineNER(config) if self.use_biaffine else None
+
         self.init_weights()
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, label_ids=None):
@@ -380,16 +415,19 @@ class AlbertNerModel(AlbertPreTrainedModel):
 
         if self.use_crf:
             logits, active_logits, loss = self.crf_layer(logits, label_ids)
+        elif self.use_biaffine:
+            logits, active_logits, loss = self.biaffine(seq_outputs, attention_mask, label_ids)
         else:
-            if attention_mask is not None:
-                active_idx = attention_mask.view(-1) == 1
-                active_logits = logits.view(-1, self.num_labels)[active_idx]
-                active_labels = label_ids.view(-1)[active_idx]
-            else:
-                active_logits = logits.view(-1, self.num_labels)
-                active_labels = label_ids.view(-1)
-
-            loss = self.loss_fct(active_logits, active_labels)
+            # if attention_mask is not None:
+            #     active_idx = attention_mask.view(-1) == 1
+            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
+            #     active_labels = label_ids.view(-1)[active_idx]
+            # else:
+            #     active_logits = logits.view(-1, self.num_labels)
+            #     active_labels = label_ids.view(-1)
+            #
+            # loss = self.loss_fct(active_logits, active_labels)
+            loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
 
@@ -405,18 +443,28 @@ class DistilBertNerModel(BertPreTrainedModel):
         self.distilbert = DistilBertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+
         if config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
+
         self.use_crf = config.use_crf
-        if self.use_crf:
-            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
-        else:
-            self.crf_layer = None
+        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+
+        self.use_biaffine = config.use_biaffine
+        self.biaffine = BiaffineNER(config) if self.use_biaffine else None
+
         self.init_weights()
 
-    def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, label_ids=None):
+    def forward(self,
+                input_ids,
+                attention_mask=None,
+                token_type_ids=None,
+                position_ids=None,
+                head_mask=None,
+                label_ids=None):
+
         outputs = self.distilbert(input_ids,
                                   attention_mask=attention_mask,
                                   head_mask=head_mask)
@@ -427,16 +475,19 @@ class DistilBertNerModel(BertPreTrainedModel):
 
         if self.use_crf:
             logits, active_logits, loss = self.crf_layer(logits, label_ids)
+        elif self.use_biaffine:
+            logits, active_logits, loss = self.biaffine(sequence_output, attention_mask, label_ids)
         else:
-            if attention_mask is not None:
-                active_idx = attention_mask.view(-1) == 1
-                active_logits = logits.view(-1, self.num_labels)[active_idx]
-                active_labels = label_ids.view(-1)[active_idx]
-            else:
-                active_logits = logits.view(-1, self.num_labels)
-                active_labels = label_ids.view(-1)
-
-            loss = self.loss_fct(active_logits, active_labels)
+            # if attention_mask is not None:
+            #     active_idx = attention_mask.view(-1) == 1
+            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
+            #     active_labels = label_ids.view(-1)[active_idx]
+            # else:
+            #     active_logits = logits.view(-1, self.num_labels)
+            #     active_labels = label_ids.view(-1)
+            #
+            # loss = self.loss_fct(active_logits, active_labels)
+            loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
 
@@ -452,11 +503,13 @@ class XLNetNerModel(XLNetForTokenClassification):
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
-        self.use_crf = config.use_crf
-        if self.use_crf:
+        if config.use_crf:
             raise Warning("Not support CRF for XLNet for now.")
-            # self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
+        if config.use_biaffine:
+            raise Warning("Not support biaffine for XLNet for now")
+        # will not support biaffine as well
         self.crf_layer = None
+        self.biaffine = None
         self.init_weights()
 
     def forward(self,
@@ -489,18 +542,7 @@ class XLNetNerModel(XLNetForTokenClassification):
         seq_outputs = self.dropout(seq_outputs)
         logits = self.classifier(seq_outputs)
 
-        if self.use_crf:
-            logits, active_logits, loss = self.crf_layer(logits, label_ids)
-        else:
-            if attention_mask is not None:
-                active_idx = attention_mask.view(-1) == 1
-                active_logits = logits.view(-1, self.num_labels)[active_idx]
-                active_labels = label_ids.view(-1)[active_idx]
-            else:
-                active_logits = logits.view(-1, self.num_labels)
-                active_labels = label_ids.view(-1)
-
-            loss = self.loss_fct(active_logits, active_labels)
+        loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
 
@@ -522,15 +564,18 @@ class BartNerModel(PreTrainedModel):
         self.bart = BartModel(config)
         self.dropout = nn.Dropout(config.dropout)
         self.classifier = nn.Linear(config.d_model, config.num_labels)
+
         if config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
+
         self.use_crf = config.use_crf
-        if self.use_crf:
-            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
-        else:
-            self.crf_layer = None
+        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+
+        self.use_biaffine = config.use_biaffine
+        self.biaffine = BiaffineNER(config) if self.use_biaffine else None
+
         self.output_concat = output_concat
         self.init_weights()
 
@@ -565,17 +610,20 @@ class BartNerModel(PreTrainedModel):
 
         if self.use_crf:
             logits, active_logits, loss = self.crf_layer(logits, label_ids)
+        elif self.use_biaffine:
+            logits, active_logits, loss = self.biaffine(sequence_output, attention_mask, label_ids)
         else:
-            if attention_mask is not None:
-                active_idx = attention_mask.view(-1) == 1
-                active_logits = logits.view(-1, self.num_labels)[active_idx]
-                active_labels = label_ids.view(-1)[active_idx]
-            else:
-                active_logits = logits.view(-1, self.num_labels)
-                active_labels = label_ids.view(-1)
-
-            # loss_fct = nn.CrossEntropyLoss()
-            loss = self.loss_fct(active_logits, active_labels)
+            # if attention_mask is not None:
+            #     active_idx = attention_mask.view(-1) == 1
+            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
+            #     active_labels = label_ids.view(-1)[active_idx]
+            # else:
+            #     active_logits = logits.view(-1, self.num_labels)
+            #     active_labels = label_ids.view(-1)
+            #
+            # # loss_fct = nn.CrossEntropyLoss()
+            # loss = self.loss_fct(active_logits, active_labels)
+            loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
 
@@ -596,15 +644,18 @@ class ElectraNerModel(ElectraForTokenClassification):
         self.electra = ElectraModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+
         if config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
+
         self.use_crf = config.use_crf
-        if self.use_crf:
-            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
-        else:
-            self.crf_layer = None
+        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+
+        self.use_biaffine = config.use_biaffine
+        self.biaffine = BiaffineNER(config) if self.use_biaffine else None
+
         self.init_weights()
 
     def forward(self,
@@ -631,16 +682,19 @@ class ElectraNerModel(ElectraForTokenClassification):
 
         if self.use_crf:
             logits, active_logits, loss = self.crf_layer(logits, label_ids)
+        elif self.use_biaffine:
+            logits, active_logits, loss = self.biaffine(sequence_output, attention_mask, label_ids)
         else:
-            if attention_mask is not None:
-                active_idx = attention_mask.view(-1) == 1
-                active_logits = logits.view(-1, self.num_labels)[active_idx]
-                active_labels = label_ids.view(-1)[active_idx]
-            else:
-                active_logits = logits.view(-1, self.num_labels)
-                active_labels = label_ids.view(-1)
-
-            loss = self.loss_fct(active_logits, active_labels)
+            # if attention_mask is not None:
+            #     active_idx = attention_mask.view(-1) == 1
+            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
+            #     active_labels = label_ids.view(-1)[active_idx]
+            # else:
+            #     active_logits = logits.view(-1, self.num_labels)
+            #     active_labels = label_ids.view(-1)
+            #
+            # loss = self.loss_fct(active_logits, active_labels)
+            loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
 
@@ -654,15 +708,18 @@ class DeBertaNerModel(DebertaPreTrainedModel):
         self.deberta = DebertaModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+
         if config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
+
         self.use_crf = config.use_crf
-        if self.use_crf:
-            self.crf_layer = Transformer_CRF(num_labels=config.num_labels, start_label_id=config.label2idx['CLS'])
-        else:
-            self.crf_layer = None
+        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+
+        self.use_biaffine = config.use_biaffine
+        self.biaffine = BiaffineNER(config) if self.use_biaffine else None
+
         self.init_weights()
 
     def forward(
@@ -675,34 +732,37 @@ class DeBertaNerModel(DebertaPreTrainedModel):
             label_ids=None,
             output_attentions=None,
             output_hidden_states=None,
-            return_dict=None
-        ):
-            outputs = self.deberta(
-                input_ids,
-                attention_mask=attention_mask,
-                token_type_ids=token_type_ids,
-                position_ids=position_ids,
-                inputs_embeds=inputs_embeds,
-                output_attentions=output_attentions,
-                output_hidden_states=output_hidden_states,
-                return_dict=return_dict
-            )
+            return_dict=None):
+        
+        outputs = self.deberta(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict
+        )
 
-            sequence_output = outputs[0]
-            sequence_output = self.dropout(sequence_output)
-            logits = self.classifier(sequence_output)
+        sequence_output = outputs[0]
+        sequence_output = self.dropout(sequence_output)
+        logits = self.classifier(sequence_output)
 
-            if self.use_crf:
-                logits, active_logits, loss = self.crf_layer(logits, label_ids)
-            else:
-                if attention_mask is not None:
-                    active_idx = attention_mask.view(-1) == 1
-                    active_logits = logits.view(-1, self.num_labels)[active_idx]
-                    active_labels = label_ids.view(-1)[active_idx]
-                else:
-                    active_logits = logits.view(-1, self.num_labels)
-                    active_labels = label_ids.view(-1)
+        if self.use_crf:
+            logits, active_logits, loss = self.crf_layer(logits, label_ids)
+        elif self.use_biaffine:
+            logits, active_logits, loss = self.biaffine(sequence_output, attention_mask, label_ids)
+        else:
+            # if attention_mask is not None:
+            #     active_idx = attention_mask.view(-1) == 1
+            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
+            #     active_labels = label_ids.view(-1)[active_idx]
+            # else:
+            #     active_logits = logits.view(-1, self.num_labels)
+            #     active_labels = label_ids.view(-1)
+            #
+            # loss = self.loss_fct(active_logits, active_labels)
+            loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
-                loss = self.loss_fct(active_logits, active_labels)
-
-            return logits, active_logits, loss
+        return logits, active_logits, loss
