@@ -200,7 +200,7 @@ class BertNerModel(BertPreTrainedModel):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -252,7 +252,7 @@ class RobertaNerModel(BertPreTrainedModel):
         self.roberta = RobertaModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -310,7 +310,7 @@ class LongformerNerModel(LongformerForTokenClassification):
         self.longformer = LongformerModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -372,7 +372,7 @@ class AlbertNerModel(AlbertPreTrainedModel):
         self.albert = AlbertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -421,7 +421,7 @@ class DistilBertNerModel(BertPreTrainedModel):
         self.distilbert = DistilBertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -464,7 +464,7 @@ class XLNetNerModel(XLNetForTokenClassification):
         self.xlnet = XLNetModel(config)
         self.classifier = nn.Linear(config.d_model, self.num_labels)
         self.dropout = nn.Dropout(config.dropout)
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -538,7 +538,7 @@ class BartNerModel(PreTrainedModel):
         self.bart = BartModel(config)
         self.dropout = nn.Dropout(config.dropout)
         self.classifier = nn.Linear(config.d_model, config.num_labels)
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -612,7 +612,7 @@ class ElectraNerModel(ElectraForTokenClassification):
         self.electra = ElectraModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -670,7 +670,7 @@ class DeBertaNerModel(DebertaPreTrainedModel):
         self.deberta = DebertaModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
