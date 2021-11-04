@@ -27,11 +27,12 @@ from model_utils import FocalLoss, _calculate_loss
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=0, num_hidden_layers=0):
+    def __init__(self, input_dim, output_dim, activation=None, hidden_dim=0, num_hidden_layers=0):
         super().__init__()
         self.weight = None
-        # TODO: test Relu and LeakyRelu (negative_slope=0.1) besides GELU as linear activation
+        # TODO: test Relu and LeakyRelu (negative_slope=0.1) linear activation
         # TODO: test if dropout need (SharedDropout)
+        activation_fct = activation if activation else nn.GELU()
         if num_hidden_layers and hidden_dim:
             # if num_hidden_layers = 1, then we have two layers
             layers = []
@@ -41,11 +42,11 @@ class MLP(nn.Module):
                 else:
                     layers.append(nn.Linear(hidden_dim, hidden_dim))
                 # should test Relu and LeakyRelu (negative_slope=0.1)
-                layers.append(nn.GELU())
-            self.weight = nn.Sequential(*layers, nn.Linear(hidden_dim, output_dim), nn.GELU())
+                layers.append(activation_fct)
+            self.weight = nn.Sequential(*layers, nn.Linear(hidden_dim, output_dim), activation_fct)
         else:
             # only one linear layer
-            self.weight = nn.Sequential(nn.Linear(input_dim, output_dim), nn.GELU())
+            self.weight = nn.Sequential(nn.Linear(input_dim, output_dim), activation_fct)
 
     def forward(self, x):
         return self.weight(x)
@@ -90,6 +91,7 @@ class BiaffineNER(nn.Module):
     def __init__(self, config):
         super().__init__()
         # TODO: option to use both bert output last and second last hidden states
+        # TODO: add flag for different MLP activation function
         # mlp_input_dim = config.hidden_size if config.include_only_bert_last_hidden else config.hidden_size*2
         mlp_input_dim = config.hidden_size
         mlp_output_dim = config.mlp_dim if config.mlp_dim > 0 else config.hidden_size
