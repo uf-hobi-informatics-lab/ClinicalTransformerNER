@@ -110,8 +110,9 @@ if __name__ == '__main__':
                         help="if copy the original plain text to output folder")
     parser.add_argument("--progress_bar", action='store_true',
                         help="show progress during the training in tqdm")
-    parser.add_argument("--use_crf", action='store_true',
-                        help="Whether to use crf layer as classifier.")
+    # do not need crf argument since config will have this information
+    # parser.add_argument("--use_crf", action='store_true',
+    #                     help="Whether to use crf layer as classifier.")
 
     global_args = parser.parse_args()
     # create logger

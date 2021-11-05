@@ -476,7 +476,8 @@ def set_up_eval_tool(args):
 def run_task(args):
     set_seed(args.seed)
 
-    if os.path.exists(args.new_model_dir) and os.listdir(args.new_model_dir) and args.do_train and not args.overwrite_model_dir:
+    if os.path.exists(args.new_model_dir) and os.listdir(args.new_model_dir) \
+            and args.do_train and not args.overwrite_model_dir:
         raise ValueError(
             """new model directory: {} exists. 
             Use --overwrite_model_dir to overwrite the previous model. 
