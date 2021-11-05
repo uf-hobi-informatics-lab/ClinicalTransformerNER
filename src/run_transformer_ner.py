@@ -2,15 +2,15 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import warnings
+from traceback import format_exc
+
 import torch
+import transformers
+from packaging import version
+
 from transformer_ner.task import run_task
 from transformer_ner.transfomer_log import TransformerNERLogger
-from traceback import format_exc
-import warnings
-
-from packaging import version
-import transformers
-
 
 pytorch_version = version.parse(transformers.__version__)
 assert pytorch_version >= version.parse('3.0.0'), \

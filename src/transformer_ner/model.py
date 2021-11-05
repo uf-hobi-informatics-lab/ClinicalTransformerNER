@@ -7,23 +7,24 @@ However, such implementation will dramatically influence the model converge proc
 The current implementation has repeated code but will guarantee the performance for each model.
 """
 
-from transformers import (BertConfig,  BertModel, BertPreTrainedModel,
-                          RobertaModel, RobertaConfig, PreTrainedModel,
-                          XLNetModel, XLNetPreTrainedModel, XLNetConfig,
-                          AlbertModel, AlbertConfig,
-                          DistilBertConfig, DistilBertModel,
-                          ALBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
-                          DISTILBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
-                          XLNET_PRETRAINED_MODEL_ARCHIVE_LIST,
-                          ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST,
-                          BERT_PRETRAINED_MODEL_ARCHIVE_LIST,
-                          BartConfig, BartModel, ElectraForTokenClassification,
-                          ElectraModel, XLNetForTokenClassification, AlbertPreTrainedModel,
-                          RobertaForTokenClassification, LongformerForTokenClassification, LongformerModel,
-                          DebertaModel, DebertaPreTrainedModel)
-from torch import nn
-import torch.nn.functional as F
 import torch
+import torch.nn.functional as F
+from torch import nn
+from transformers import (ALBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
+                          BERT_PRETRAINED_MODEL_ARCHIVE_LIST,
+                          DISTILBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
+                          ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST,
+                          XLNET_PRETRAINED_MODEL_ARCHIVE_LIST, AlbertConfig,
+                          AlbertModel, AlbertPreTrainedModel, BartConfig,
+                          BartModel, BertConfig, BertModel,
+                          BertPreTrainedModel, DebertaModel,
+                          DebertaPreTrainedModel, DistilBertConfig,
+                          DistilBertModel, ElectraForTokenClassification,
+                          ElectraModel, LongformerForTokenClassification,
+                          LongformerModel, PreTrainedModel, RobertaConfig,
+                          RobertaForTokenClassification, RobertaModel,
+                          XLNetConfig, XLNetForTokenClassification, XLNetModel,
+                          XLNetPreTrainedModel)
 
 
 class Biaffine(nn.Module):

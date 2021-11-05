@@ -3,13 +3,15 @@
 
 import warnings
 from pathlib import Path
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
+
 import torch
 from torch.nn import CrossEntropyLoss
-from transformers import (XLNetTokenizer, AlbertTokenizer, RobertaTokenizer,
-                          BertTokenizer, DistilBertTokenizer, LongformerTokenizer,
-                          ElectraTokenizer, BartTokenizer, DebertaTokenizer)
-
+from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
+                              TensorDataset)
+from transformers import (AlbertTokenizer, BartTokenizer, BertTokenizer,
+                          DebertaTokenizer, DistilBertTokenizer,
+                          ElectraTokenizer, LongformerTokenizer,
+                          RobertaTokenizer, XLNetTokenizer)
 
 NEXT_TOKEN = "[next]"
 NEXT_GUARD = -2

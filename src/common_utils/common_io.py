@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
-import pickle as pkl
 import json
+import pickle as pkl
 
 
 def read_from_file(ifn):

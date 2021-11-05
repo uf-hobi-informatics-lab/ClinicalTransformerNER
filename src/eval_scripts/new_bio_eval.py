@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
-from itertools import chain
+import argparse
 from collections import defaultdict
+from itertools import chain
 from math import pow
 from pathlib import Path
-import argparse
 
 
 def read_from_file(ifn):
@@ -373,6 +373,7 @@ def main(targs):
 
 def test():
     from pprint import pprint
+
     # from seqeval.metrics import classification_report
     # test within memory
     # a = [['O', 'O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER']]

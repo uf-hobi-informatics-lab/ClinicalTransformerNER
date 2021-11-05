@@ -5,22 +5,23 @@ The input files must have offset information. In input file, for each word in li
 output file suffix will be set to .bio.txt
 """
 
-import torch
 import argparse
 import os
 import traceback
 from pathlib import Path
 
-from common_utils.common_io import json_load, output_bio
-from transformer_ner.data_utils import TransformerNerDataProcessor, transformer_convert_data_to_features
-from transformer_ner.task import load_model, predict, MODEL_CLASSES, _output_bio
-from transformer_ner.transfomer_log import TransformerNERLogger
-from common_utils.common_log import LOG_LVLs
-from common_utils.output_format_converter import main as format_converter
-
+import torch
 import transformers
 from packaging import version
 
+from common_utils.common_io import json_load, output_bio
+from common_utils.common_log import LOG_LVLs
+from common_utils.output_format_converter import main as format_converter
+from transformer_ner.data_utils import (TransformerNerDataProcessor,
+                                        transformer_convert_data_to_features)
+from transformer_ner.task import (MODEL_CLASSES, _output_bio, load_model,
+                                  predict)
+from transformer_ner.transfomer_log import TransformerNERLogger
 
 pytorch_version = version.parse(transformers.__version__)
 assert pytorch_version >= version.parse('3.0.0'), \

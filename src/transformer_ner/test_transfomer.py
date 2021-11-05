@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import sys
 from pathlib import Path
+
 from transformer_ner.task import run_task
 from transformer_ner.transfomer_log import TransformerNERLogger
 
@@ -50,6 +51,8 @@ class Args:
         self.progress_bar = True
         self.save_model_core = True
         self.use_crf = False
+        self.focal_loss = False
+        self.focal_loss_gamma = 2
 
 
 def test():

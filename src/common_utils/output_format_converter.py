@@ -8,11 +8,11 @@ The script also provide a tool to merge several brat or BioC formatted files int
 The pre-request is BIO data must have offset information
 """
 
-from pathlib import Path
-from common_utils.common_io import read_from_file, load_bio_file_into_sents
 import shutil
 import traceback
+from pathlib import Path
 
+from common_utils.common_io import load_bio_file_into_sents, read_from_file
 
 BRAT_TEMPLATE = "{}\t{} {} {}\t{}"
 BIOC_TEMPLATE = """

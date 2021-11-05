@@ -1,9 +1,10 @@
 # !/usr/bin/python
 #  -*- coding: utf-8 -*-
 
-from common_utils.common_log import create_logger
 import logging
 from pathlib import Path
+
+from common_utils.common_log import create_logger
 
 
 class TransformerNERLogger:

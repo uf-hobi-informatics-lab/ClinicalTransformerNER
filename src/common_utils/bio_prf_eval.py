@@ -35,13 +35,14 @@
 ############################################################################################################
 
 
-from common_utils.common_io import load_bio_file_into_sents
-from itertools import chain
+import argparse
 from collections import defaultdict
-from common_utils.common_log import create_logger
+from itertools import chain
 from math import pow
 from pathlib import Path
-import argparse
+
+from common_utils.common_io import load_bio_file_into_sents
+from common_utils.common_log import create_logger
 
 
 class PRF:
