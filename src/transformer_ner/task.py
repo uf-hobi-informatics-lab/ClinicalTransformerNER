@@ -10,38 +10,37 @@ Though new model will be trained and saved separately, we use the tokenizer and 
 and --tokenizer_name to base model name (e.g., bert-base-uncased). The base model name can be found in model directory. We will automatically set up this in later version.
 """
 
-from common_utils.bio_prf_eval import BioEval
-from transformers import (AdamW, get_linear_schedule_with_warmup,
-                          BertConfig, DistilBertConfig, BartConfig,
-                          XLNetConfig, XLNetTokenizer, RobertaConfig,
-                          AlbertConfig, AlbertTokenizer,
-                          BertConfig, BertTokenizer,
-                          XLNetConfig, XLNetTokenizer,
-                          RobertaConfig, RobertaTokenizer,
-                          AlbertConfig, AlbertTokenizer,
-                          DistilBertConfig, DistilBertTokenizer,
-                          BartConfig, BartTokenizer,
-                          ElectraConfig, ElectraTokenizer,
-                          LongformerConfig, LongformerTokenizer,
-                          DebertaConfig, DebertaTokenizer)
-
-import torch
-from torch.nn import functional as F
-from torch.nn import CrossEntropyLoss
-import random
-import numpy as np
-from pathlib import Path
 import os
+import random
+from pathlib import Path
+
+import numpy as np
+import torch
+from torch.nn import CrossEntropyLoss
+from torch.nn import functional as F
 from tqdm import tqdm, trange
-from common_utils.common_io import json_load, output_bio, json_dump
+from transformers import (AdamW, AlbertConfig, AlbertTokenizer, BartConfig,
+                          BartTokenizer, BertConfig, BertTokenizer,
+                          DebertaConfig, DebertaTokenizer, DistilBertConfig,
+                          DistilBertTokenizer, ElectraConfig, ElectraTokenizer,
+                          LongformerConfig, LongformerTokenizer, RobertaConfig,
+                          RobertaTokenizer, XLNetConfig, XLNetTokenizer,
+                          get_linear_schedule_with_warmup)
 
-from transformer_ner.model import (BertNerModel, RobertaNerModel, XLNetNerModel, AlbertNerModel,
-                                   DistilBertNerModel, BertLikeNerModel, Transformer_CRF, BartNerModel,
-                                   ElectraNerModel, LongformerNerModel, DeBertaNerModel)
-from transformer_ner.data_utils import (TransformerNerDataProcessor, transformer_convert_data_to_features,
-                                        ner_data_loader, batch_to_model_inputs,
-                                        convert_features_to_tensors, NEXT_GUARD, NEXT_TOKEN)
-
+from common_utils.bio_prf_eval import BioEval
+from common_utils.common_io import json_dump, json_load, output_bio
+from transformer_ner.data_utils import (NEXT_GUARD, NEXT_TOKEN,
+                                        TransformerNerDataProcessor,
+                                        batch_to_model_inputs,
+                                        convert_features_to_tensors,
+                                        ner_data_loader,
+                                        transformer_convert_data_to_features)
+from transformer_ner.model import (AlbertNerModel, BartNerModel,
+                                   BertLikeNerModel, BertNerModel,
+                                   DeBertaNerModel, DistilBertNerModel,
+                                   ElectraNerModel, LongformerNerModel,
+                                   RobertaNerModel, Transformer_CRF,
+                                   XLNetNerModel)
 
 MODEL_CLASSES = {
     'bert': (BertConfig, BertNerModel, BertTokenizer),
@@ -477,7 +476,8 @@ def set_up_eval_tool(args):
 def run_task(args):
     set_seed(args.seed)
 
-    if os.path.exists(args.new_model_dir) and os.listdir(args.new_model_dir) and args.do_train and not args.overwrite_model_dir:
+    if os.path.exists(args.new_model_dir) and os.listdir(args.new_model_dir) \
+            and args.do_train and not args.overwrite_model_dir:
         raise ValueError(
             """new model directory: {} exists. 
             Use --overwrite_model_dir to overwrite the previous model. 
