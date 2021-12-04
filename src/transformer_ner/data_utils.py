@@ -3,13 +3,15 @@
 
 import warnings
 from pathlib import Path
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
+
 import torch
 from torch.nn import CrossEntropyLoss
-from transformers import (XLNetTokenizer, AlbertTokenizer, RobertaTokenizer,
-                          BertTokenizer, DistilBertTokenizer, LongformerTokenizer,
-                          ElectraTokenizer, BartTokenizer, DebertaTokenizer)
-
+from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
+                              TensorDataset)
+from transformers import (AlbertTokenizer, BartTokenizer, BertTokenizer,
+                          DebertaTokenizer, DistilBertTokenizer,
+                          ElectraTokenizer, LongformerTokenizer,
+                          RobertaTokenizer, XLNetTokenizer)
 
 NEXT_TOKEN = "[next]"
 NEXT_GUARD = -2
@@ -94,7 +96,8 @@ Otherwise will cause prediction error.''')
         _, dev_labels = self._read_data(self.data_dir / "dev.txt", task='train')
 
         if dev_labels.intersection(train_labels) != dev_labels:
-            self.logger.warning("dev set has label ({}) not appeared in train set.".format({e for e in dev_labels if e not in train_labels}))
+            self.logger.warning("dev set has label ({}) not appeared in train set.".format(
+                {e for e in dev_labels if e not in train_labels}))
 
         for lb in sorted(train_labels, key=lambda x: x.split("-")[-1]):
             if lb not in label2idx:

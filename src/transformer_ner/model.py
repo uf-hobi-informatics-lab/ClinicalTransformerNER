@@ -5,23 +5,24 @@
 The current implementation has repeated code but will guarantee the performance for each model.
 """
 
-from transformers import (BertConfig,  BertModel, BertPreTrainedModel,
-                          RobertaModel, RobertaConfig, PreTrainedModel,
-                          XLNetModel, XLNetPreTrainedModel, XLNetConfig,
-                          AlbertModel, AlbertConfig,
-                          DistilBertConfig, DistilBertModel,
-                          ALBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
-                          DISTILBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
-                          XLNET_PRETRAINED_MODEL_ARCHIVE_LIST,
-                          ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST,
-                          BERT_PRETRAINED_MODEL_ARCHIVE_LIST,
-                          BartConfig, BartModel, ElectraForTokenClassification,
-                          ElectraModel, XLNetForTokenClassification, AlbertPreTrainedModel,
-                          RobertaForTokenClassification, LongformerForTokenClassification, LongformerModel,
-                          DebertaModel, DebertaPreTrainedModel)
-from torch import nn
-import torch.nn.functional as F
 import torch
+import torch.nn.functional as F
+from torch import nn
+from transformers import (ALBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
+                          BERT_PRETRAINED_MODEL_ARCHIVE_LIST,
+                          DISTILBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
+                          ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST,
+                          XLNET_PRETRAINED_MODEL_ARCHIVE_LIST, AlbertConfig,
+                          AlbertModel, AlbertPreTrainedModel, BartConfig,
+                          BartModel, BertConfig, BertModel,
+                          BertPreTrainedModel, DebertaModel,
+                          DebertaPreTrainedModel, DistilBertConfig,
+                          DistilBertModel, ElectraForTokenClassification,
+                          ElectraModel, LongformerForTokenClassification,
+                          LongformerModel, PreTrainedModel, RobertaConfig,
+                          RobertaForTokenClassification, RobertaModel,
+                          XLNetConfig, XLNetForTokenClassification, XLNetModel,
+                          XLNetPreTrainedModel)
 
 from model_utils import FocalLoss, _calculate_loss
 
@@ -203,7 +204,7 @@ class BertNerModel(BertPreTrainedModel):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -216,7 +217,8 @@ class BertNerModel(BertPreTrainedModel):
 
         self.init_weights()
 
-    def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, label_ids=None):
+    def forward(self, input_ids, attention_mask=None, token_type_ids=None,
+                position_ids=None, head_mask=None, label_ids=None):
         outputs = self.bert(input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
@@ -259,7 +261,7 @@ class RobertaNerModel(BertPreTrainedModel):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -272,7 +274,8 @@ class RobertaNerModel(BertPreTrainedModel):
 
         self.init_weights()
 
-    def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, label_ids=None):
+    def forward(self, input_ids, attention_mask=None, token_type_ids=None,
+                position_ids=None, head_mask=None, label_ids=None):
         """
         :return: raw logits without any softmax or log_softmax transformation
 
@@ -323,7 +326,7 @@ class LongformerNerModel(LongformerForTokenClassification):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -391,7 +394,7 @@ class AlbertNerModel(AlbertPreTrainedModel):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -404,7 +407,8 @@ class AlbertNerModel(AlbertPreTrainedModel):
 
         self.init_weights()
 
-    def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, label_ids=None):
+    def forward(self, input_ids, attention_mask=None, token_type_ids=None,
+                position_ids=None, head_mask=None, label_ids=None):
         outputs = self.albert(input_ids,
                               attention_mask=attention_mask,
                               token_type_ids=token_type_ids,
@@ -446,7 +450,7 @@ class DistilBertNerModel(BertPreTrainedModel):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -501,7 +505,7 @@ class XLNetNerModel(XLNetForTokenClassification):
         self.xlnet = XLNetModel(config)
         self.classifier = nn.Linear(config.d_model, self.num_labels)
         self.dropout = nn.Dropout(config.dropout)
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -558,7 +562,8 @@ class BartNerModel(PreTrainedModel):
     """
     config_class = BartConfig
     base_model_prefix = "bart"
-    pretrained_model_archive_map = {"bart-large": "https://s3.amazonaws.com/models.huggingface.co/bert/facebook/bart-large/pytorch_model.bin"}
+    pretrained_model_archive_map = {
+        "bart-large": "https://s3.amazonaws.com/models.huggingface.co/bert/facebook/bart-large/pytorch_model.bin"}
 
     def __init__(self, config, output_concat=False):
         super().__init__(config)
@@ -567,7 +572,7 @@ class BartNerModel(PreTrainedModel):
         self.dropout = nn.Dropout(config.dropout)
         self.classifier = nn.Linear(config.d_model, config.num_labels)
 
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -593,7 +598,8 @@ class BartNerModel(PreTrainedModel):
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
 
-    def forward(self, input_ids, attention_mask=None, decoder_input_ids=None, encoder_outputs=None, decoder_attention_mask=None, decoder_cached_states=None, label_ids=None):
+    def forward(self, input_ids, attention_mask=None, decoder_input_ids=None, encoder_outputs=None,
+                decoder_attention_mask=None, decoder_cached_states=None, label_ids=None):
         # dco = decoder output; eco = encoder output
         dco, eco = self.bart(input_ids,
                              attention_mask=attention_mask,
@@ -647,7 +653,7 @@ class ElectraNerModel(ElectraForTokenClassification):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()
@@ -711,7 +717,7 @@ class DeBertaNerModel(DebertaPreTrainedModel):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
-        if config.use_focal_loss:
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
             self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
         else:
             self.loss_fct = nn.CrossEntropyLoss()

@@ -2,15 +2,15 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import warnings
+from traceback import format_exc
+
 import torch
+import transformers
+from packaging import version
+
 from transformer_ner.task import run_task
 from transformer_ner.transfomer_log import TransformerNERLogger
-from traceback import format_exc
-import warnings
-
-from packaging import version
-import transformers
-
 
 pytorch_version = version.parse(transformers.__version__)
 assert pytorch_version >= version.parse('3.0.0'), \
@@ -23,8 +23,11 @@ def main():
     # add arguments
     parser.add_argument("--model_type", default='bert', type=str, required=True,
                         help="valid values: bert, roberta or xlnet")
-    parser.add_argument("--pretrained_model", type=str, required=True,
+    parser.add_argument("--pretrained_model", type=str, default=None,
                         help="The pretrained model file or directory for fine tuning.")
+    # resume training on a NER model if set it will overwrite pretrained_model
+    parser.add_argument("--resume_from_model", type=str, default=None,
+                        help="The NER model file or directory for continuous fine tuning.")
     parser.add_argument("--config_name", default=None, type=str,
                         help="Pretrained config name or path if not the same as pretrained_model")
     parser.add_argument("--tokenizer_name", default=None, type=str,
@@ -121,6 +124,14 @@ def main():
     global_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info("Task will use cuda device: GPU_{}.".format(
         torch.cuda.current_device()) if torch.cuda.device_count() else 'Task will use CPU.')
+
+    # if use resume_from_model, then resume_from_model will overwrite pretrained_model
+    if global_args.resume_from_model:
+        global_args.pretrained_model = global_args.resume_from_model
+
+    if global_args.resume_from_model is None and global_args.pretrained_model is None:
+        raise RuntimeError("""Both resume_from_model and pretrained_model are not set.
+        You have to specify one of them.""")
 
     # if args.tokenizer_name and args.config_name are not specially set, set them as pretrained_model
     if not global_args.tokenizer_name:

@@ -9,6 +9,7 @@ The script is used to help all the prediction without format
 import argparse
 import traceback
 from pathlib import Path
+
 from common_utils.output_format_converter import main as format_converter
 
 

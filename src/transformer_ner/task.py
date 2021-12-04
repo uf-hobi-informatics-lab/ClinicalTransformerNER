@@ -10,38 +10,38 @@ Though new model will be trained and saved separately, we use the tokenizer and 
 and --tokenizer_name to base model name (e.g., bert-base-uncased). The base model name can be found in model directory. We will automatically set up this in later version.
 """
 
-from common_utils.bio_prf_eval import BioEval
-from transformers import (AdamW, get_linear_schedule_with_warmup,
-                          BertConfig, DistilBertConfig, BartConfig,
-                          XLNetConfig, XLNetTokenizer, RobertaConfig,
-                          AlbertConfig, AlbertTokenizer,
-                          BertConfig, BertTokenizer,
-                          XLNetConfig, XLNetTokenizer,
-                          RobertaConfig, RobertaTokenizer,
-                          AlbertConfig, AlbertTokenizer,
-                          DistilBertConfig, DistilBertTokenizer,
-                          BartConfig, BartTokenizer,
-                          ElectraConfig, ElectraTokenizer,
-                          LongformerConfig, LongformerTokenizer,
-                          DebertaConfig, DebertaTokenizer)
-
-import torch
-from torch.nn import functional as F
-from torch.nn import CrossEntropyLoss
-import random
-import numpy as np
-from pathlib import Path
 import os
+import random
+import warnings
+from pathlib import Path
+import traceback
+
+import numpy as np
+import torch
+from torch.nn import CrossEntropyLoss
+from torch.nn import functional as F
 from tqdm import tqdm, trange
-from common_utils.common_io import json_load, output_bio, json_dump
+from transformers import (AdamW, AlbertConfig, AlbertTokenizer, BartConfig,
+                          BartTokenizer, BertConfig, BertTokenizer,
+                          DebertaConfig, DebertaTokenizer, DistilBertConfig,
+                          DistilBertTokenizer, ElectraConfig, ElectraTokenizer,
+                          LongformerConfig, LongformerTokenizer, RobertaConfig,
+                          RobertaTokenizer, XLNetConfig, XLNetTokenizer,
+                          get_linear_schedule_with_warmup)
 
-from transformer_ner.model import (BertNerModel, RobertaNerModel, XLNetNerModel, AlbertNerModel,
-                                   DistilBertNerModel, BertLikeNerModel, Transformer_CRF, BartNerModel,
-                                   ElectraNerModel, LongformerNerModel, DeBertaNerModel)
-from transformer_ner.data_utils import (TransformerNerDataProcessor, transformer_convert_data_to_features,
-                                        ner_data_loader, batch_to_model_inputs,
-                                        convert_features_to_tensors, NEXT_GUARD, NEXT_TOKEN)
-
+from common_utils.bio_prf_eval import BioEval
+from common_utils.common_io import json_dump, json_load, output_bio
+from transformer_ner.data_utils import (NEXT_GUARD, NEXT_TOKEN,
+                                        TransformerNerDataProcessor,
+                                        batch_to_model_inputs,
+                                        convert_features_to_tensors,
+                                        ner_data_loader,
+                                        transformer_convert_data_to_features)
+from transformer_ner.model import (AlbertNerModel, BartNerModel,
+                                   BertNerModel, XLNetNerModel,
+                                   DeBertaNerModel, DistilBertNerModel,
+                                   ElectraNerModel, LongformerNerModel,
+                                   RobertaNerModel, Transformer_CRF)
 
 MODEL_CLASSES = {
     'bert': (BertConfig, BertNerModel, BertTokenizer),
@@ -73,6 +73,7 @@ def load_model(args, new_model_dir=None):
         model = model(config=args.config)
         model.load_state_dict(state_dict=ckpt)
     except AttributeError as Ex:
+        args.logger.error(traceback.format_exc())
         args.logger.warning(
             """The model seems save using model.save instead of model.state_dict,
             attempt to directly using the loaded checkpoint as model.""")
@@ -496,7 +497,8 @@ def set_up_eval_tool(args):
 def run_task(args):
     set_seed(args.seed)
 
-    if os.path.exists(args.new_model_dir) and os.listdir(args.new_model_dir) and args.do_train and not args.overwrite_model_dir:
+    if os.path.exists(args.new_model_dir) and os.listdir(args.new_model_dir) \
+            and args.do_train and not args.overwrite_model_dir:
         raise ValueError(
             """new model directory: {} exists. 
             Use --overwrite_model_dir to overwrite the previous model. 
@@ -513,6 +515,18 @@ def run_task(args):
         labels, label2idx = ner_data_processor.get_labels(default=args.model_type)
     else:
         label2idx = json_load(os.path.join(args.new_model_dir, "label2idx.json"))
+
+    # if use resume_from_model,
+    # we need to check the label in new data exact same as the one used in training previous model
+    if args.do_train and args.resume_from_model is not None:
+        label2idx_from_old = json_load(Path(args.resume_from_model / "label2idx.json"))
+        assert len(label2idx_from_old) == len(label2idx), """expect same label2idx but get old one from resume model as {};
+        and the new one from current data is {}""".format(label2idx_from_old, label2idx)
+        for k in label2idx.keys():
+            assert k in label2idx_from_old, f"the label {k} is not in old label2idx " \
+                                            "check your data make sure all annotations are the same in two datasets"
+        warnings.warn("will overwrite label2idx with label2idx from old model to make sure labels are mapped correct.")
+        label2idx = label2idx_from_old
 
     num_labels = len(label2idx)
     idx2label = {v: k for k, v in label2idx.items()}
@@ -532,15 +546,17 @@ def run_task(args):
                 args.tokenizer_name, do_lower_case=args.do_lower_case, add_prefix_space=True)
         else:
             tokenizer = model_tokenizer.from_pretrained(args.tokenizer_name, do_lower_case=args.do_lower_case)
-        tokenizer.add_tokens(NEXT_TOKEN)
-        config = model_config.from_pretrained(args.config_name, num_labels=num_labels)
-        config.mlp_dim = args.mlp_dim
-        config.use_biaffine = args.use_biaffine
-        config.use_crf = args.use_crf
-        config.label2idx = args.label2idx
-        config.use_focal_loss = args.focal_loss
-        config.focal_loss_gamma = args.focal_loss_gamma
-        args.logger.info("New Model Config:\n{}".format(config))
+
+        if args.resume_from_model is None:
+            tokenizer.add_tokens(NEXT_TOKEN)
+            config = model_config.from_pretrained(args.config_name, num_labels=num_labels)
+            config.use_crf = args.use_crf
+            config.label2idx = args.label2idx
+            config.use_focal_loss = args.focal_loss
+            config.focal_loss_gamma = args.focal_loss_gamma
+            args.logger.info("New Model Config:\n{}".format(config))
+        else:
+            config = model_config.from_pretrained(args.config_name, num_labels=num_labels)
 
         if args.pretrained_model == "microsoft/deberta-xlarge-v2":
             raise NotImplementedError("""the deberta-xlarge-v2 tokenizer is different from other deberta models
@@ -548,13 +564,17 @@ def run_task(args):
             you can try other debata models: microsoft/deberta-base, 
             microsoft/deberta-large, microsoft/deberta-xlarge""")
 
-        model = model_model.from_pretrained(args.pretrained_model, config=config)
+        if args.resume_from_model is not None:
+            args.config = config
+            model = load_model(args, args.resume_from_model)
+        else:
+            model = model_model.from_pretrained(args.pretrained_model, config=config)
+            # #add an control token for combine sentence if it is too long to fit max_seq_len
+            model.resize_token_embeddings(len(tokenizer))
+            config.vocab_size = len(tokenizer)
+            args.config = model.config
 
-        # #add an control token for combine sentence if it is too long to fit max_seq_len
-        model.resize_token_embeddings(len(tokenizer))
-        config.vocab_size = len(tokenizer)
         args.tokenizer = tokenizer
-        args.config = model.config
         model.to(args.device)
 
         train_examples = ner_data_processor.get_train_examples()
@@ -582,7 +602,7 @@ def run_task(args):
     # predict - test.txt file prediction (if you need predict many files, use 'run_transformer_batch_prediction')
     if args.do_predict:
         args.config = model_config.from_pretrained(args.new_model_dir, num_labels=num_labels)
-        args.use_crf = args.config.use_crf
+        # args.use_crf = args.config.use_crf
         # args.model_type = args.config.model_type
         if args.model_type in {"roberta", "bart", "longformer"}:
             # we need to set add_prefix_space to True for roberta, longformer, and Bart (any tokenizer from GPT-2)
