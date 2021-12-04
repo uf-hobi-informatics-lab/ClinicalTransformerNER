@@ -1,8 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-torch>=1.6.0
-transformers==3.1.0
-tqdm>=4.36.1
-numpy==1.16.0
-packaging
+torch>=1.9.0
+transformers==4.12.5
+tqdm>=4.62.1
+numpy==1.20.0
+packaging==21.0
