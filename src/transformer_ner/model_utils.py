@@ -224,3 +224,109 @@ def _calculate_loss(logits, attention_mask, label_ids, loss_fct=None, num_labels
     loss = loss_fct(active_logits, active_labels)
 
     return loss, active_logits
+
+
+# Fast Gradient Method for ADVERSARIAL TRAINING
+class FGM:
+    """
+    How to use:
+        fgm = FGM(model)
+        for batch_input, batch_label in data:
+            # training
+            loss = model(batch_input, batch_label)
+            loss.backward()
+            # ADVERSARIAL TRAINING
+            fgm.attack()
+            loss_adv = model(batch_input, batch_label)
+            loss_adv.backward()
+            fgm.restore()
+            # backward propagation
+            optimizer.step()
+            model.zero_grad()
+    """
+    def __init__(self, model):
+        self.model = model
+        self.backup = {}
+
+    def attack(self, epsilon=1., emb_name='embeddings.'):
+        for name, param in self.model.named_parameters():
+            if param.requires_grad and emb_name in name:
+                self.backup[name] = param.data.clone()
+                norm = torch.norm(param.grad)
+                if norm != 0 and not torch.isnan(norm):
+                    r_at = epsilon * param.grad / norm
+                    param.data.add_(r_at)
+
+    def restore(self, emb_name='emb.'):
+        for name, param in self.model.named_parameters():
+            if param.requires_grad and emb_name in name:
+                assert name in self.backup
+                param.data = self.backup[name]
+        self.backup = {}
+
+
+# Projected Gradient Descent
+class PGD:
+    """
+    How to use:
+        pgd = PGD(model)
+        K = 3
+        for batch_input, batch_label in data:
+            loss = model(batch_input, batch_label)
+            loss.backward()
+            pgd.backup_grad()
+
+            # ADVERSARIAL TRAINING
+            for t in range(K):
+                pgd.attack(is_first_attack=(t==0))
+                if t != K-1:
+                    model.zero_grad()
+                else:
+                    pgd.restore_grad()
+                loss_adv = model(batch_input, batch_label)
+                loss_adv.backward()
+            pgd.restore()
+
+            optimizer.step()
+            model.zero_grad()
+    """
+    def __init__(self, model):
+        self.model = model
+        self.emb_backup = {}
+        self.grad_backup = {}
+
+    def attack(self, epsilon=1., alpha=0.3, emb_name='embeddings.', is_first_attack=False):
+        for name, param in self.model.named_parameters():
+            if param.requires_grad and emb_name in name:
+                if is_first_attack:
+                    self.emb_backup[name] = param.data.clone()
+                norm = torch.norm(param.grad)
+                if norm != 0 and not torch.isnan(norm):
+                    r_at = alpha * param.grad / norm
+                    param.data.add_(r_at)
+                    param.data = self.project(name, param.data, epsilon)
+
+    def restore(self, emb_name='embeddings.'):
+        for name, param in self.model.named_parameters():
+            if param.requires_grad and emb_name in name:
+                assert name in self.emb_backup
+                param.data = self.emb_backup[name]
+        self.emb_backup = {}
+
+    def project(self, param_name, param_data, epsilon):
+        r = param_data - self.emb_backup[param_name]
+        if torch.norm(r) > epsilon:
+            r = epsilon * r / torch.norm(r)
+        return self.emb_backup[param_name] + r
+
+    def backup_grad(self):
+        for name, param in self.model.named_parameters():
+            if param.requires_grad:
+                self.grad_backup[name] = param.grad.clone()
+
+    def restore_grad(self):
+        for name, param in self.model.named_parameters():
+            if param.requires_grad:
+                param.grad = self.grad_backup[name]
+
+# TODO: https://github.com/zhuchen03/FreeLB/blob/master/huggingface-transformers/examples/run_glue_freelb.py
