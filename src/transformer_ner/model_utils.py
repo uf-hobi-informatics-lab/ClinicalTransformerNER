@@ -257,7 +257,7 @@ class FGM:
                     r_at = epsilon * param.grad / norm
                     param.data.add_(r_at)
 
-    def restore(self, emb_name='emb.'):
+    def restore(self, emb_name='embeddings.'):
         for name, param in self.model.named_parameters():
             if param.requires_grad and emb_name in name:
                 assert name in self.backup

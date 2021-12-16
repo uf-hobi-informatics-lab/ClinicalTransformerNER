@@ -27,6 +27,7 @@ from transformers import (AdamW, AlbertConfig, AlbertTokenizer, BartConfig,
                           DistilBertTokenizer, ElectraConfig, ElectraTokenizer,
                           LongformerConfig, LongformerTokenizer, RobertaConfig,
                           RobertaTokenizer, XLNetConfig, XLNetTokenizer,
+                          DebertaV2Tokenizer, DebertaV2Config,
                           get_linear_schedule_with_warmup)
 
 from common_utils.bio_prf_eval import BioEval
@@ -41,7 +42,8 @@ from transformer_ner.model import (AlbertNerModel, BartNerModel,
                                    BertNerModel, XLNetNerModel,
                                    DeBertaNerModel, DistilBertNerModel,
                                    ElectraNerModel, LongformerNerModel,
-                                   RobertaNerModel, Transformer_CRF)
+                                   RobertaNerModel, Transformer_CRF,
+                                   DeBertaV2NerModel)
 
 MODEL_CLASSES = {
     'bert': (BertConfig, BertNerModel, BertTokenizer),
@@ -52,7 +54,8 @@ MODEL_CLASSES = {
     'bart': (BartConfig, BartNerModel, BartTokenizer),
     'electra': (ElectraConfig, ElectraNerModel, ElectraTokenizer),
     'longformer': (LongformerConfig, LongformerNerModel, LongformerTokenizer),
-    'deberta': (DebertaConfig, DeBertaNerModel, DebertaTokenizer)
+    'deberta': (DebertaConfig, DeBertaNerModel, DebertaTokenizer),
+    'deberta-v2': (DebertaV2Config, DeBertaV2NerModel, DebertaV2Tokenizer)
 }
 
 
@@ -99,11 +102,14 @@ def save_only_transformer_core(args, model):
         model_core = model.electra
     elif model_type == "deberta":
         model_core = model.deberta
+    elif model_type == "deberta-v2":
+        model_core = model.deberta_v2
     elif model_type == "longformer":
         model_core = model.longformer
     else:
-        args.logger.warning("{} is current not supported for saving model core; we will skip saving to prevent error.".format(
-            args.model_type))
+        args.logger.warning(
+            "{} is current not supported for saving model core; we will skip saving to prevent error."
+                .format(args.model_type))
         return
     model_core.save_pretrained(args.new_model_dir)
 
@@ -142,6 +148,7 @@ def check_partial_token(token_as_id, tokenizer):
             and not token.startswith('Ġ'):
         flag = True
     elif (isinstance(tokenizer, AlbertTokenizer) or
+          isinstance(tokenizer, DebertaV2Tokenizer) or
           isinstance(tokenizer, XLNetTokenizer)) \
             and not token.startswith('▁'):
         flag = True
@@ -558,12 +565,6 @@ def run_task(args):
         else:
             config = model_config.from_pretrained(args.config_name, num_labels=num_labels)
 
-        if args.pretrained_model == "microsoft/deberta-xlarge-v2":
-            raise NotImplementedError("""the deberta-xlarge-v2 tokenizer is different from other deberta models
-            the support for deberta-xlarge-v2 is not implemented.
-            you can try other debata models: microsoft/deberta-base, 
-            microsoft/deberta-large, microsoft/deberta-xlarge""")
-
         if args.resume_from_model is not None:
             args.config = config
             model = load_model(args, args.resume_from_model)
@@ -604,7 +605,7 @@ def run_task(args):
         args.config = model_config.from_pretrained(args.new_model_dir, num_labels=num_labels)
         # args.use_crf = args.config.use_crf
         # args.model_type = args.config.model_type
-        if args.model_type in {"roberta", "bart", "longformer"}:
+        if args.model_type in {"roberta", "bart", "longformer", "deberta"}:
             # we need to set add_prefix_space to True for roberta, longformer, and Bart (any tokenizer from GPT-2)
             tokenizer = model_tokenizer.from_pretrained(
                 args.tokenizer_name, do_lower_case=args.do_lower_case, add_prefix_space=True)

@@ -61,10 +61,13 @@ class Args:
 
 def test():
     # test training
-    for each in [('bert', 'bert-base-uncased'),
-                 ('deberta', "microsoft/deberta-base"),
-                 ('roberta', 'roberta-base'),
-                 ('xlnet', 'xlnet-base-cased')]:
+    for each in [
+        ('deberta-v2', "microsoft/deberta-xlarge-v2"),
+        ('bert', 'bert-base-uncased'),
+        ('deberta', "microsoft/deberta-base"),
+        ('roberta', 'roberta-base'),
+        ('xlnet', 'xlnet-base-cased')
+    ]:
         args = Args(each[0], each[1], do_train=True, do_predict=False)
         run_task(args)
 

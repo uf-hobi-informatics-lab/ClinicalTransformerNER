@@ -22,7 +22,7 @@ from transformers import (ALBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
                           LongformerModel, PreTrainedModel, RobertaConfig,
                           RobertaForTokenClassification, RobertaModel,
                           XLNetConfig, XLNetForTokenClassification, XLNetModel,
-                          XLNetPreTrainedModel)
+                          XLNetPreTrainedModel, DebertaV2Model, DebertaV2ForTokenClassification)
 
 from model_utils import FocalLoss, _calculate_loss
 
@@ -774,3 +774,71 @@ class DeBertaNerModel(DebertaPreTrainedModel):
             loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
+
+
+class DeBertaV2NerModel(DebertaV2ForTokenClassification):
+    def __init__(self, config):
+        super().__init__(config)
+        self.num_labels = config.num_labels
+        self.deberta_v2 = DebertaV2Model(config)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
+            self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
+        else:
+            self.loss_fct = nn.CrossEntropyLoss()
+
+        self.use_crf = config.use_crf
+        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+
+        self.use_biaffine = config.use_biaffine
+        self.biaffine = BiaffineNER(config) if self.use_biaffine else None
+
+        self.init_weights()
+
+    def forward(
+            self,
+            input_ids=None,
+            attention_mask=None,
+            token_type_ids=None,
+            position_ids=None,
+            inputs_embeds=None,
+            label_ids=None,
+            output_attentions=None,
+            output_hidden_states=None,
+            return_dict=None):
+
+        outputs = self.deberta_v2(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict
+        )
+
+        sequence_output = outputs[0]
+        sequence_output = self.dropout(sequence_output)
+        logits = self.classifier(sequence_output)
+
+        if self.use_crf:
+            logits, active_logits, loss = self.crf_layer(logits, label_ids)
+        elif self.use_biaffine:
+            logits, active_logits, loss = self.biaffine(sequence_output, attention_mask, label_ids)
+        else:
+            # if attention_mask is not None:
+            #     active_idx = attention_mask.view(-1) == 1
+            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
+            #     active_labels = label_ids.view(-1)[active_idx]
+            # else:
+            #     active_logits = logits.view(-1, self.num_labels)
+            #     active_labels = label_ids.view(-1)
+            #
+            # loss = self.loss_fct(active_logits, active_labels)
+            loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
+
+        return logits, active_logits, loss
+
