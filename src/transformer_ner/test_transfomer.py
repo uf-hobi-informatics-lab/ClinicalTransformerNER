@@ -54,7 +54,6 @@ class Args:
         self.progress_bar = True
         self.save_model_core = True
         self.use_crf = False
-        self.crf_reduction = "token_mean"
         self.focal_loss = False
         self.focal_loss_gamma = 2
         self.resume_from_model = resume_from_model

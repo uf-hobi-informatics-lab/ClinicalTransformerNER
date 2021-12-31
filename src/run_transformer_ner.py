@@ -58,8 +58,6 @@ def main():
                         help="Whether to run prediction on the test set.")
     parser.add_argument("--use_crf", action='store_true',
                         help="Whether to use crf layer as classifier.")
-    parser.add_argument("--crf_reduction", type=str, default="token_mean",
-                        help="reduction to apply on crf layer to calculate loss.")
     parser.add_argument("--do_lower_case", action='store_true',
                         help="Set this flag if you are using an uncased model.")
     parser.add_argument("--train_batch_size", default=8, type=int,

@@ -138,7 +138,7 @@ class BertNerModel(BertPreTrainedModel):
             self.loss_fct = nn.CrossEntropyLoss()
 
         self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
+        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
 
         self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
@@ -204,7 +204,7 @@ class RobertaNerModel(BertPreTrainedModel):
             self.loss_fct = nn.CrossEntropyLoss()
 
         self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
+        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
 
         self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
@@ -277,7 +277,7 @@ class LongformerNerModel(LongformerForTokenClassification):
             self.loss_fct = nn.CrossEntropyLoss()
 
         self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
+        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
 
         self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
@@ -353,7 +353,7 @@ class AlbertNerModel(AlbertPreTrainedModel):
             self.loss_fct = nn.CrossEntropyLoss()
 
         self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
+        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
 
         self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
@@ -417,7 +417,7 @@ class DistilBertNerModel(BertPreTrainedModel):
             self.loss_fct = nn.CrossEntropyLoss()
 
         self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
+        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
 
         self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
@@ -547,7 +547,7 @@ class BartNerModel(PreTrainedModel):
             self.loss_fct = nn.CrossEntropyLoss()
 
         self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
+        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
 
         self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
@@ -636,7 +636,7 @@ class ElectraNerModel(ElectraForTokenClassification):
             self.loss_fct = nn.CrossEntropyLoss()
 
         self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
+        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
 
         self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
@@ -708,7 +708,7 @@ class DeBertaNerModel(DebertaPreTrainedModel):
             self.loss_fct = nn.CrossEntropyLoss()
 
         self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
+        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
 
         self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
@@ -783,7 +783,7 @@ class DeBertaV2NerModel(DebertaV2ForTokenClassification):
             self.loss_fct = nn.CrossEntropyLoss()
 
         self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
+        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
 
         self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None

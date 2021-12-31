@@ -360,7 +360,7 @@ class New_Transformer_CRF(nn.Module):
     .. _Viterbi algorithm: https://en.wikipedia.org/wiki/Viterbi_algorithm
     """
 
-    def __init__(self, num_tags: int, reduction='token_mean', batch_first=True) -> None:
+    def __init__(self, num_tags: int, batch_first=True) -> None:
         if num_tags <= 0:
             raise ValueError(f'invalid number of tags: {num_tags}')
         super().__init__()
@@ -369,7 +369,6 @@ class New_Transformer_CRF(nn.Module):
         self.start_transitions = nn.Parameter(torch.empty(num_tags))
         self.end_transitions = nn.Parameter(torch.empty(num_tags))
         self.transitions = nn.Parameter(torch.empty(num_tags, num_tags))
-        self.reduction = reduction
 
         self.reset_parameters()
 
@@ -406,8 +405,7 @@ class New_Transformer_CRF(nn.Module):
             reduction is ``none``, ``()`` otherwise.
         """
         self._validate(emissions, tags=tags, mask=mask)
-        if self.reduction not in ('none', 'sum', 'mean', 'token_mean'):
-            raise ValueError(f'invalid reduction: {self.reduction}')
+
         if mask is None:
             mask = torch.ones_like(tags, dtype=torch.uint8)
 
@@ -422,18 +420,7 @@ class New_Transformer_CRF(nn.Module):
         denominator = self._compute_normalizer(emissions, mask)
         # shape: (batch_size,)
         llh = numerator - denominator
-
-        loss = None
-        if self.reduction == 'none':
-            loss = llh
-        elif self.reduction == 'sum':
-            loss = llh.sum()
-        elif self.reduction == 'mean':
-            loss = llh.mean()
-        elif self.reduction == 'token_mean':
-            loss = llh.sum() / mask.type_as(emissions).sum()
-        else:
-            loss = llh.sum() / mask.type_as(emissions).sum()
+        loss = llh.sum() / mask.type_as(emissions).sum()
         return -loss
 
     def decode(self, emissions: torch.Tensor,
