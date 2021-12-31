@@ -267,7 +267,7 @@ def train(args, model, train_features, dev_features):
                 global_step += 1
 
             # using training step
-            if args.train_steps > 0 and (global_step + 1) % args.train_steps == 0 and epoch > 0:
+            if args.train_steps > 0 and (global_step + 1) % args.train_steps == 0:
                 # the current implementation will skip the all evaluations in the first epoch
                 best_score, eval_loss = evaluate(
                     args, model, new_model_dir, dev_features, epoch, global_step, best_score)
@@ -558,9 +558,12 @@ def run_task(args):
             tokenizer.add_tokens(NEXT_TOKEN)
             config = model_config.from_pretrained(args.config_name, num_labels=num_labels)
             config.use_crf = args.use_crf
+            config.crf_reduction = args.crf_reduction
             config.label2idx = args.label2idx
             config.use_focal_loss = args.focal_loss
             config.focal_loss_gamma = args.focal_loss_gamma
+            config.use_biaffine = args.use_biaffine
+            config.mlp_dim = args.mlp_dim
             args.logger.info("New Model Config:\n{}".format(config))
         else:
             config = model_config.from_pretrained(args.config_name, num_labels=num_labels)

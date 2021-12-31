@@ -79,7 +79,8 @@ class TransformerNerDataProcessor(object):
         """
         if default in {'bert', 'roberta', 'albert',
                        'distilbert', 'bart', 'xlnet',
-                       'electra', 'deberta', 'longformer'} and not customized_label2idx:
+                       'electra', 'deberta', 'longformer',
+                       'deberta-v2'} and not customized_label2idx:
             # we do not need special label for SEP, using O instead
             # label2idx = {'O': 4, 'X': 3, 'PAD': 0, 'CLS': 1, 'SEP': 2}
             label2idx = {'O': 3, 'X': 2, 'PAD': 0, 'CLS': 1}

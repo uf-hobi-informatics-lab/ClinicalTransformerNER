@@ -54,9 +54,12 @@ class Args:
         self.progress_bar = True
         self.save_model_core = True
         self.use_crf = False
+        self.crf_reduction = "token_mean"
         self.focal_loss = False
         self.focal_loss_gamma = 2
         self.resume_from_model = resume_from_model
+        self.use_biaffine = False
+        self.mlp_dim = 128
 
 
 def test():
@@ -88,11 +91,22 @@ def test2():
     run_task(args)
 
 
+def test3():
+    # test prediction
+    args = Args("bert", 'bert-base-uncased', do_train=True, do_predict=True,
+                new_model_dir=Path(
+                    __file__).resolve().parent.parent.parent / "new_ner_model" / "bert-base-uncased_conll2003")
+    args.use_crf = True
+    run_task(args)
+
+
 if __name__ == '__main__':
     which_test = input("run which test? 1 or 2 or 3")
-    if which_test == "1":
+    if which_test == "0":
         test()
-    elif which_test == "2":
+    elif which_test == "1":
         test1()
-    else:
+    elif which_test == "2":
         test2()
+    elif which_test == "3":
+        test3()

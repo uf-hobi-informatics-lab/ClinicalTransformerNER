@@ -25,6 +25,7 @@ from transformers import (ALBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
                           XLNetPreTrainedModel, DebertaV2Model, DebertaV2ForTokenClassification)
 
 from model_utils import FocalLoss, _calculate_loss
+from model_utils import New_Transformer_CRF as Transformer_CRF
 
 
 class MLP(nn.Module):
@@ -115,79 +116,6 @@ class BiaffineNER(nn.Module):
         return logits, active_logits, loss
 
 
-class Transformer_CRF(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.num_labels = config.num_labels
-        self.start_label_id = config.label2idx['CLS']
-        self.transitions = nn.Parameter(torch.randn(self.num_labels, self.num_labels), requires_grad=True)
-        self.log_alpha = nn.Parameter(torch.zeros(1, 1, 1), requires_grad=False)
-        self.score = nn.Parameter(torch.zeros(1, 1), requires_grad=False)
-        self.log_delta = nn.Parameter(torch.zeros(1, 1, 1), requires_grad=False)
-        self.psi = nn.Parameter(torch.zeros(1, 1, 1), requires_grad=False)
-        self.path = nn.Parameter(torch.zeros(1, 1, dtype=torch.long), requires_grad=False)
-
-    @staticmethod
-    def log_sum_exp_batch(log_Tensor, axis=-1):
-        # shape (batch_size,n,m)
-        sum_score = torch.exp(log_Tensor - torch.max(log_Tensor, axis)[0].view(log_Tensor.shape[0], -1, 1)).sum(axis)
-        return torch.max(log_Tensor, axis)[0] + torch.log(sum_score)
-
-    def reset_layers(self):
-        self.log_alpha = self.log_alpha.fill_(0.)
-        self.score = self.score.fill_(0.)
-        self.log_delta = self.log_delta.fill_(0.)
-        self.psi = self.psi.fill_(0.)
-        self.path = self.path.fill_(0)
-
-    def forward(self, feats, label_ids):
-        forward_score = self._forward_alg(feats)
-        max_logLL_allz_allx, path, gold_score = self._crf_decode(feats, label_ids)
-        loss = torch.mean(forward_score - gold_score)
-        self.reset_layers()
-        return path, max_logLL_allz_allx, loss
-
-    def _forward_alg(self, feats):
-        """alpha-recursion or forward recursion; to compute the partition function"""
-        # feats -> (batch size, num_labels)
-        seq_size = feats.shape[1]
-        batch_size = feats.shape[0]
-        log_alpha = self.log_alpha.expand(batch_size, 1, self.num_labels).clone().fill_(-10000.)
-        log_alpha[:, 0, self.start_label_id] = 0
-        for t in range(1, seq_size):
-            log_alpha = (self.log_sum_exp_batch(self.transitions + log_alpha, axis=-1) + feats[:, t]).unsqueeze(1)
-        return self.log_sum_exp_batch(log_alpha)
-
-    def _crf_decode(self, feats, label_ids):
-        seq_size = feats.shape[1]
-        batch_size = feats.shape[0]
-
-        batch_transitions = self.transitions.expand(batch_size, self.num_labels, self.num_labels)
-        batch_transitions = batch_transitions.flatten(1)
-        score = self.score.expand(batch_size, 1)
-
-        log_delta = self.log_delta.expand(batch_size, 1, self.num_labels).clone().fill_(-10000.)
-        log_delta[:, 0, self.start_label_id] = 0
-        psi = self.psi.expand(batch_size, seq_size, self.num_labels).clone()
-
-        for t in range(1, seq_size):
-            batch_trans_score = batch_transitions.gather(
-                -1, (label_ids[:, t] * self.num_labels + label_ids[:, t-1]).view(-1, 1))
-            temp_score = feats[:, t].gather(-1, label_ids[:, t].view(-1, 1)).view(-1, 1)
-            score = score + batch_trans_score + temp_score
-
-            log_delta, psi[:, t] = torch.max(self.transitions + log_delta, -1)
-            log_delta = (log_delta + feats[:, t]).unsqueeze(1)
-
-        # trace back
-        path = self.path.expand(batch_size, seq_size).clone()
-        max_logLL_allz_allx, path[:, -1] = torch.max(log_delta.squeeze(), -1)
-        for t in range(seq_size-2, -1, -1):
-            path[:, t] = psi[:, t+1].gather(-1, path[:, t+1].view(-1, 1)).squeeze()
-
-        return max_logLL_allz_allx, path, score
-
-
 class BertNerModel(BertPreTrainedModel):
     """
     model architecture:
@@ -209,10 +137,10 @@ class BertNerModel(BertPreTrainedModel):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf
-        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
+        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
 
-        self.use_biaffine = config.use_biaffine
+        self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
 
         self.init_weights()
@@ -230,7 +158,16 @@ class BertNerModel(BertPreTrainedModel):
         logits = self.classifier(sequence_output)
 
         if self.use_crf:
-            logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            # logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            loss = self.crf_layer(emissions=logits,
+                                  tags=label_ids,
+                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+            active_logits = None
+            if self.training:
+                logits = None
+            else:
+                logits = self.crf_layer.decode(emissions=logits,
+                                               mask=None)
         elif self.use_biaffine:
             logits, active_logits, loss = self.biaffine(sequence_output, attention_mask, label_ids)
         else:
@@ -266,10 +203,10 @@ class RobertaNerModel(BertPreTrainedModel):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf
-        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
+        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
 
-        self.use_biaffine = config.use_biaffine
+        self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
 
         self.init_weights()
@@ -299,7 +236,15 @@ class RobertaNerModel(BertPreTrainedModel):
         logits = self.classifier(seq_outputs)
 
         if self.use_crf:
-            logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            loss = self.crf_layer(emissions=logits,
+                                  tags=label_ids,
+                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+            active_logits = None
+            if self.training:
+                logits = None
+            else:
+                logits = self.crf_layer.decode(emissions=logits,
+                                               mask=None)
         elif self.use_biaffine:
             logits, active_logits, loss = self.biaffine(seq_outputs, attention_mask, label_ids)
         else:
@@ -331,10 +276,10 @@ class LongformerNerModel(LongformerForTokenClassification):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf
-        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
+        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
 
-        self.use_biaffine = config.use_biaffine
+        self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
 
         self.init_weights()
@@ -363,7 +308,15 @@ class LongformerNerModel(LongformerForTokenClassification):
         logits = self.classifier(sequence_output)
 
         if self.use_crf:
-            logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            loss = self.crf_layer(emissions=logits,
+                                  tags=label_ids,
+                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+            active_logits = None
+            if self.training:
+                logits = None
+            else:
+                logits = self.crf_layer.decode(emissions=logits,
+                                               mask=None)
         elif self.use_biaffine:
             logits, active_logits, loss = self.biaffine(sequence_output, attention_mask, label_ids)
         else:
@@ -399,10 +352,10 @@ class AlbertNerModel(AlbertPreTrainedModel):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf
-        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
+        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
 
-        self.use_biaffine = config.use_biaffine
+        self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
 
         self.init_weights()
@@ -420,7 +373,15 @@ class AlbertNerModel(AlbertPreTrainedModel):
         logits = self.classifier(seq_outputs)
 
         if self.use_crf:
-            logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            loss = self.crf_layer(emissions=logits,
+                                  tags=label_ids,
+                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+            active_logits = None
+            if self.training:
+                logits = None
+            else:
+                logits = self.crf_layer.decode(emissions=logits,
+                                               mask=None)
         elif self.use_biaffine:
             logits, active_logits, loss = self.biaffine(seq_outputs, attention_mask, label_ids)
         else:
@@ -455,10 +416,10 @@ class DistilBertNerModel(BertPreTrainedModel):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf
-        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
+        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
 
-        self.use_biaffine = config.use_biaffine
+        self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
 
         self.init_weights()
@@ -480,7 +441,15 @@ class DistilBertNerModel(BertPreTrainedModel):
         logits = self.classifier(sequence_output)
 
         if self.use_crf:
-            logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            loss = self.crf_layer(emissions=logits,
+                                  tags=label_ids,
+                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+            active_logits = None
+            if self.training:
+                logits = None
+            else:
+                logits = self.crf_layer.decode(emissions=logits,
+                                               mask=None)
         elif self.use_biaffine:
             logits, active_logits, loss = self.biaffine(sequence_output, attention_mask, label_ids)
         else:
@@ -513,7 +482,7 @@ class XLNetNerModel(XLNetForTokenClassification):
             raise Warning("Not support CRF for XLNet for now.")
         if config.use_biaffine:
             raise Warning("Not support biaffine for XLNet for now")
-        # will not support biaffine as well
+        # will not support crf and biaffine
         self.crf_layer = None
         self.biaffine = None
         self.init_weights()
@@ -577,10 +546,10 @@ class BartNerModel(PreTrainedModel):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf
-        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
+        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
 
-        self.use_biaffine = config.use_biaffine
+        self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
 
         self.output_concat = output_concat
@@ -617,7 +586,15 @@ class BartNerModel(PreTrainedModel):
         logits = self.classifier(sequence_output)
 
         if self.use_crf:
-            logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            loss = self.crf_layer(emissions=logits,
+                                  tags=label_ids,
+                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+            active_logits = None
+            if self.training:
+                logits = None
+            else:
+                logits = self.crf_layer.decode(emissions=logits,
+                                               mask=None)
         elif self.use_biaffine:
             logits, active_logits, loss = self.biaffine(sequence_output, attention_mask, label_ids)
         else:
@@ -658,10 +635,10 @@ class ElectraNerModel(ElectraForTokenClassification):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf
-        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
+        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
 
-        self.use_biaffine = config.use_biaffine
+        self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
 
         self.init_weights()
@@ -689,7 +666,15 @@ class ElectraNerModel(ElectraForTokenClassification):
         logits = self.classifier(sequence_output)
 
         if self.use_crf:
-            logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            loss = self.crf_layer(emissions=logits,
+                                  tags=label_ids,
+                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+            active_logits = None
+            if self.training:
+                logits = None
+            else:
+                logits = self.crf_layer.decode(emissions=logits,
+                                               mask=None)
         elif self.use_biaffine:
             logits, active_logits, loss = self.biaffine(sequence_output, attention_mask, label_ids)
         else:
@@ -722,10 +707,10 @@ class DeBertaNerModel(DebertaPreTrainedModel):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf
-        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
+        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
 
-        self.use_biaffine = config.use_biaffine
+        self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
 
         self.init_weights()
@@ -758,7 +743,15 @@ class DeBertaNerModel(DebertaPreTrainedModel):
         logits = self.classifier(sequence_output)
 
         if self.use_crf:
-            logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            loss = self.crf_layer(emissions=logits,
+                                  tags=label_ids,
+                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+            active_logits = None
+            if self.training:
+                logits = None
+            else:
+                logits = self.crf_layer.decode(emissions=logits,
+                                               mask=None)
         elif self.use_biaffine:
             logits, active_logits, loss = self.biaffine(sequence_output, attention_mask, label_ids)
         else:
@@ -789,10 +782,10 @@ class DeBertaV2NerModel(DebertaV2ForTokenClassification):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf
-        self.crf_layer = Transformer_CRF(config) if self.use_crf else None
+        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
+        self.crf_layer = Transformer_CRF(config.num_labels, config.crf_reduction) if self.use_crf else None
 
-        self.use_biaffine = config.use_biaffine
+        self.use_biaffine = config.use_biaffine if hasattr(config, "use_biaffine") else None
         self.biaffine = BiaffineNER(config) if self.use_biaffine else None
 
         self.init_weights()
@@ -825,7 +818,15 @@ class DeBertaV2NerModel(DebertaV2ForTokenClassification):
         logits = self.classifier(sequence_output)
 
         if self.use_crf:
-            logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            loss = self.crf_layer(emissions=logits,
+                                  tags=label_ids,
+                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+            active_logits = None
+            if self.training:
+                logits = None
+            else:
+                logits = self.crf_layer.decode(emissions=logits,
+                                               mask=None)
         elif self.use_biaffine:
             logits, active_logits, loss = self.biaffine(sequence_output, attention_mask, label_ids)
         else:
