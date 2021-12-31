@@ -381,10 +381,7 @@ def _eval(args, model, features):
 
 def evaluate(args, model, new_model_dir, features, epoch, global_step, best_score):
     """evaluationn dev dataset and return acc, pre, rec, f1 score for model development"""
-    if args.use_biaffine:
-        y_true, y_pred, eval_loss = _biaffine_get_predict_labels(args, model, features)
-    else:
-        y_true, y_pred, eval_loss = _eval(args, model, features)
+    y_true, y_pred, eval_loss = _eval(args, model, features)
     args.eval_tool.eval_mem(y_true, y_pred)
     # # # debug
     # args.logger.debug(args.eval_tool.get_counts())
@@ -412,22 +409,6 @@ def evaluate(args, model, new_model_dir, features, epoch, global_step, best_scor
             save_only_transformer_core(args, model)
 
     return best_score, eval_loss
-
-
-def _biaffine_get_predict_labels(args, model, features):
-    # call biaffine dataset to dataloader function
-    data_loader = ner_data_loader(features, batch_size=args.eval_batch_size, task='test', auto=False)
-    eval_size = len(data_loader)
-    y_trues, y_preds = [], []
-    eval_loss = .0
-    model.eval()
-
-    return y_trues, y_preds, round(eval_loss/eval_size, 4)
-
-
-def biaffine_predict(args, model, features):
-    # for biaffine, we set 'O' index to 0 by default, other annotated types will be 1, 2, ...
-    system_labels = {label for idx, label in args.idx2label.items()}
 
 
 def __fix_bio(bios):
@@ -561,7 +542,6 @@ def run_task(args):
             config.label2idx = args.label2idx
             config.use_focal_loss = args.focal_loss
             config.focal_loss_gamma = args.focal_loss_gamma
-            config.use_biaffine = args.use_biaffine
             config.mlp_dim = args.mlp_dim
             args.logger.info("New Model Config:\n{}".format(config))
         else:

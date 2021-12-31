@@ -154,8 +154,12 @@ def main():
     if global_args.use_crf and global_args.use_biaffine:
         raise RuntimeError("You can not run both CRF and biaffine. Choose only one or None of them to proceed.")
 
+    # TODO: biaffine still use this as run interface, we need to add link to biaffine run below based on biaffine flag
     try:
-        run_task(global_args)
+        if global_args.use_biaffine:
+            raise NotImplementedError("still under development")
+        else:
+            run_task(global_args)
     except Exception as ex:
         logger.error(format_exc())
 
