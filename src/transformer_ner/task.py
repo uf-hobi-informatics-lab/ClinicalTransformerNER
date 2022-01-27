@@ -21,7 +21,7 @@ import torch
 from torch.nn import CrossEntropyLoss
 from torch.nn import functional as F
 from tqdm import tqdm, trange
-from transformers import (AdamW, AlbertConfig, AlbertTokenizer, BartConfig,
+from transformers import (AlbertConfig, AlbertTokenizer, BartConfig,
                           BartTokenizer, BertConfig, BertTokenizer,
                           DebertaConfig, DebertaTokenizer, DistilBertConfig,
                           DistilBertTokenizer, ElectraConfig, ElectraTokenizer,
@@ -29,6 +29,7 @@ from transformers import (AdamW, AlbertConfig, AlbertTokenizer, BartConfig,
                           RobertaTokenizer, XLNetConfig, XLNetTokenizer,
                           DebertaV2Tokenizer, DebertaV2Config,
                           get_linear_schedule_with_warmup)
+from torch.optim import AdamW
 
 from common_utils.bio_prf_eval import BioEval
 from common_utils.common_io import json_dump, json_load, output_bio
