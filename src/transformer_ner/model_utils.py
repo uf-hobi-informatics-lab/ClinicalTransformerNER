@@ -227,6 +227,9 @@ def _calculate_loss(logits, attention_mask, label_ids, loss_fct=None, num_labels
     return loss, active_logits
 
 
+# https://github.com/ShannonAI/dice_loss_for_NLP/blob/master/loss/dice_loss.py
+
+
 # Fast Gradient Method for ADVERSARIAL TRAINING
 class FGM:
     """

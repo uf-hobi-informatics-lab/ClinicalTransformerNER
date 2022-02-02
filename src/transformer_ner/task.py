@@ -28,6 +28,7 @@ from transformers import (AlbertConfig, AlbertTokenizer, BartConfig,
                           LongformerConfig, LongformerTokenizer, RobertaConfig,
                           RobertaTokenizer, XLNetConfig, XLNetTokenizer,
                           DebertaV2Tokenizer, DebertaV2Config,
+                          MegatronBertConfig,
                           get_linear_schedule_with_warmup)
 from torch.optim import AdamW
 
@@ -44,7 +45,7 @@ from transformer_ner.model import (AlbertNerModel, BartNerModel,
                                    DeBertaNerModel, DistilBertNerModel,
                                    ElectraNerModel, LongformerNerModel,
                                    RobertaNerModel, Transformer_CRF,
-                                   DeBertaV2NerModel)
+                                   DeBertaV2NerModel, MegatronNerModel)
 
 MODEL_CLASSES = {
     'bert': (BertConfig, BertNerModel, BertTokenizer),
@@ -56,7 +57,8 @@ MODEL_CLASSES = {
     'electra': (ElectraConfig, ElectraNerModel, ElectraTokenizer),
     'longformer': (LongformerConfig, LongformerNerModel, LongformerTokenizer),
     'deberta': (DebertaConfig, DeBertaNerModel, DebertaTokenizer),
-    'deberta-v2': (DebertaV2Config, DeBertaV2NerModel, DebertaV2Tokenizer)
+    'deberta-v2': (DebertaV2Config, DeBertaV2NerModel, DebertaV2Tokenizer),
+    'megatron': (MegatronBertConfig, MegatronNerModel, BertTokenizer)
 }
 
 
@@ -89,6 +91,8 @@ def save_only_transformer_core(args, model):
     model_type = args.model_type
     if model_type == "bert":
         model_core = model.bert
+    if model_type == "megatron":
+        model_core = model.megatron
     elif model_type == "roberta":
         model_core = model.roberta
     elif model_type == "xlnet":
