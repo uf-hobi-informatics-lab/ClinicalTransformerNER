@@ -196,7 +196,7 @@ class LongformerNerModel(LongformerForTokenClassification):
                                   tags=label_ids,
                                   mask=torch.tensor(attention_mask, dtype=torch.uint8))
             active_logits = None
-            logits = None if self.training else self.crf_layer.decode(emissions=logits,mask=None)
+            logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
             # if attention_mask is not None:
             #     active_idx = attention_mask.view(-1) == 1
@@ -313,7 +313,7 @@ class DistilBertNerModel(BertPreTrainedModel):
                                   tags=label_ids,
                                   mask=torch.tensor(attention_mask, dtype=torch.uint8))
             active_logits = None
-            logits = None if self.training else self.crf_layer.decode(emissions=logits,mask=None)
+            logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
             # if attention_mask is not None:
             #     active_idx = attention_mask.view(-1) == 1
@@ -522,7 +522,7 @@ class ElectraNerModel(ElectraForTokenClassification):
                                   tags=label_ids,
                                   mask=torch.tensor(attention_mask, dtype=torch.uint8))
             active_logits = None
-            logits = None if self.training else self.crf_layer.decode(emissions=logits,mask=None)
+            logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
             # if attention_mask is not None:
             #     active_idx = attention_mask.view(-1) == 1
@@ -591,7 +591,7 @@ class DeBertaNerModel(DebertaPreTrainedModel):
                                   tags=label_ids,
                                   mask=torch.tensor(attention_mask, dtype=torch.uint8))
             active_logits = None
-            logits = None if self.training else self.crf_layer.decode(emissions=logits,mask=None)
+            logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
             # if attention_mask is not None:
             #     active_idx = attention_mask.view(-1) == 1
@@ -658,7 +658,7 @@ class DeBertaV2NerModel(DebertaV2ForTokenClassification):
                                   tags=label_ids,
                                   mask=torch.tensor(attention_mask, dtype=torch.uint8))
             active_logits = None
-            logits = None if self.training else self.crf_layer.decode(emissions=logits,mask=None)
+            logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
             # if attention_mask is not None:
             #     active_idx = attention_mask.view(-1) == 1
@@ -718,7 +718,7 @@ class MegatronNerModel(MegatronBertPreTrainedModel):
                                   tags=label_ids,
                                   mask=torch.tensor(attention_mask, dtype=torch.uint8))
             active_logits = None
-            logits = None if self.training else self.crf_layer.decode(emissions=logits,mask=None)
+            logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
             loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 

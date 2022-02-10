@@ -58,7 +58,7 @@ class Biaffine(nn.Module):
         m = t1*U => [b,s,o,v] => [b, s*o, v]
         m*t2.T => [b, s*o, v] * [b, v, s] => [b, s, o, s] => [b, s, s, o]: this is the mapping table
         """
-        biaffine_mappings = torch.einsum('bxi,ioj,byj->bxyo', x, self.U, y)
+        biaffine_mappings = torch.einsum('bxi,ioj,byj->bxyo', x, self.U, y)  # einsum known to be slow in some cases
 
         return biaffine_mappings
 
