@@ -23,7 +23,7 @@ from transformers import (ALBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
                           RobertaForTokenClassification, RobertaModel,
                           XLNetConfig, XLNetForTokenClassification, XLNetModel,
                           XLNetPreTrainedModel, DebertaV2Model, DebertaV2ForTokenClassification,
-                          MegatronBertPreTrainedModel, MegatronBertModel)
+                          MegatronBertPreTrainedModel, MegatronBertModel, MegatronBertPreTrainedModel)
 
 from model_utils import FocalLoss, _calculate_loss
 from model_utils import New_Transformer_CRF as Transformer_CRF
@@ -677,7 +677,7 @@ class DeBertaV2NerModel(DebertaV2ForTokenClassification):
 class MegatronNerModel(MegatronBertPreTrainedModel):
     """
     model architecture:
-      (bert): BertModel
+      (bert): MegatronBertModel
       (dropout): Dropout(p=0.1, inplace=False)
       (classifier): Linear(in_features=768, out_features=12, bias=True)
       (loss_fct): CrossEntropyLoss()
@@ -686,7 +686,7 @@ class MegatronNerModel(MegatronBertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
-        self.megatron = MegatronBertModel(config)
+        self.bert = MegatronBertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
@@ -702,7 +702,7 @@ class MegatronNerModel(MegatronBertPreTrainedModel):
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None,
                 position_ids=None, head_mask=None, label_ids=None):
-        outputs = self.megatron(input_ids,
+        outputs = self.bert(input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
                             position_ids=position_ids,

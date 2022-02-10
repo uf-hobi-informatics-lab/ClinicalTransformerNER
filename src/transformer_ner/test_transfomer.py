@@ -64,6 +64,7 @@ class Args:
 def test():
     # test training
     for each in [
+        ("megatron", "/Users/alexgre/workspace/py3/HOBI-lab/models/345m_uf_full_deid_pubmed_mimic_wiki_fullcased50k_release"),
         ('deberta-v2', "microsoft/deberta-xlarge-v2"),
         ('bert', 'bert-base-uncased'),
         ('deberta', "microsoft/deberta-base"),
