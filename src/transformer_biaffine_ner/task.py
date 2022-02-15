@@ -1,6 +1,7 @@
 # coding=utf-8
 # Created by bugface (https://github.com/bugface)
 # First created at 12/31/21
+from transformer_ner.model_utils import PGD, FGM, FocalLoss
 
 
 def _biaffine_get_predict_labels(args, model, features):

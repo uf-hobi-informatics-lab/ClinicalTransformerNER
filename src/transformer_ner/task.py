@@ -46,6 +46,8 @@ from transformer_ner.model import (AlbertNerModel, BartNerModel,
                                    ElectraNerModel, LongformerNerModel,
                                    RobertaNerModel, Transformer_CRF,
                                    DeBertaV2NerModel, MegatronNerModel)
+from model_utils import PGD, FGM
+
 
 MODEL_CLASSES = {
     'bert': (BertConfig, BertNerModel, BertTokenizer),
@@ -59,6 +61,12 @@ MODEL_CLASSES = {
     'deberta': (DebertaConfig, DeBertaNerModel, DebertaTokenizer),
     'deberta-v2': (DebertaV2Config, DeBertaV2NerModel, DebertaV2Tokenizer),
     'megatron': (MegatronBertConfig, MegatronNerModel, BertTokenizer)
+}
+
+
+ADVERSARIAL_TRAINING = {
+    "pgd": PGD,
+    "fgm": FGM
 }
 
 
@@ -172,6 +180,30 @@ def set_seed(seed=13):
         torch.cuda.manual_seed_all(seed)
 
 
+def adversarial_train(args, trainer, model=None, batch=None, k=3):
+    # for pgd, we current hard code K as 3
+    # TODO: add argument to allow change K for PGD method
+    if args.adversarial_training_method == "fgm":
+        trainer.attack()
+        _, _, loss_adv = model(**batch)
+        loss_adv.backward()
+        trainer.restore()
+    elif args.adversarial_training_method == "pgd":
+        trainer.backup_grad()
+        for t in range(k):
+            trainer.attack(is_first_attack=(t == 0))
+            if t != k - 1:
+                model.zero_grad()
+            else:
+                trainer.restore_grad()
+            _, _, loss_adv = model(**batch)
+            loss_adv.backward()
+        trainer.restore()
+    else:
+        raise RuntimeError(
+            f"adopt adversarial training but use an unrecognized method name: {args.adversarial_training_method}")
+
+
 def train(args, model, train_features, dev_features):
     """NER model training on train dataset; select model based on performance on dev dataset"""
     # create data loader
@@ -233,11 +265,17 @@ def train(args, model, train_features, dev_features):
     early_stop_flag = 0
 
     model.zero_grad()
+
+    # apply ADVERSARIAL TRAINING
+    adversarial_trainer = ADVERSARIAL_TRAINING[args.adversarial_training_method](model) \
+        if args.adversarial_training else None
+
     epoch_iter = trange(int(args.num_train_epochs), desc="Epoch", disable=False if args.progress_bar else True)
     for epoch in epoch_iter:
         batch_iter = tqdm(iterable=data_loader, desc='Batch', disable=False if args.progress_bar else True)
         for step, batch in enumerate(batch_iter):
             model.train()
+
             batch = tuple(b.to(args.device) for b in batch)
             train_inputs = batch_to_model_inputs(batch, args.model_type)
             
@@ -254,7 +292,11 @@ def train(args, model, train_features, dev_features):
                 scaler.scale(loss).backward()
             else:
                 loss.backward()
-            
+
+            # apply ADVERSARIAL TRAINING
+            if args.adversarial_training:
+                adversarial_train(args, adversarial_trainer, model, train_inputs)
+
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if args.fp16:
                     scaler.unscale_(optimizer)
@@ -581,6 +623,8 @@ def run_task(args):
 
         # set up evaluation metrics
         args.eval_tool = set_up_eval_tool(args)
+        # set up ADVERSARIAL TRAINING training
+        args.adversarial_training = True if args.adversarial_training_method is not None else False
         # start training
         train(args, model, train_features, dev_features)
         # save config and tokenizer with new model

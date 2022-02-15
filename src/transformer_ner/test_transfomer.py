@@ -59,14 +59,16 @@ class Args:
         self.resume_from_model = resume_from_model
         self.use_biaffine = False
         self.mlp_dim = 128
+        self.adversarial_training_method = None  # None, "fgm", "pgd"
 
 
 def test():
     # test training
     for each in [
-        ("megatron", "/Users/alexgre/workspace/py3/HOBI-lab/models/345m_uf_full_deid_pubmed_mimic_wiki_fullcased50k_release"),
-        ('deberta-v2', "microsoft/deberta-xlarge-v2"),
         ('bert', 'bert-base-uncased'),
+        ('deberta-v2', "microsoft/deberta-xlarge-v2"),
+        ("megatron",
+         "/Users/alexgre/workspace/py3/HOBI-lab/models/345m_uf_full_deid_pubmed_mimic_wiki_fullcased50k_release"),
         ('deberta', "microsoft/deberta-base"),
         ('roberta', 'roberta-base'),
         ('xlnet', 'xlnet-base-cased')

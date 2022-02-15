@@ -103,6 +103,10 @@ def main():
     parser.add_argument("--mlp_dim", default=128, type=int,
                         help="The dimension for MLP layer in biaffine module, default to 128."
                              "If set this value <= 0, we use transformer model hidden layer dimension")
+    # adversarial training method: pgd, fgm
+    parser.add_argument("--adversarial_training_method", default=None,
+                        help="what method to use for adversarial training, support pgd and fgm; "
+                             "default is None which disable this function")
     # fp16 and distributed training (we use pytorch naive implementation instead of Apex)
     parser.add_argument('--fp16', action='store_true',
                         help="Whether to use 16-bit float precision instead of 32-bit")

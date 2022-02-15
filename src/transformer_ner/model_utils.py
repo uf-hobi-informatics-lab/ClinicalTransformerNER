@@ -326,7 +326,7 @@ class PGD:
     def backup_grad(self):
         for name, param in self.model.named_parameters():
             if param.requires_grad:
-                self.grad_backup[name] = param.grad.clone()
+                self.grad_backup[name] = param.grad.clone() if param.grad is not None else None
 
     def restore_grad(self):
         for name, param in self.model.named_parameters():
