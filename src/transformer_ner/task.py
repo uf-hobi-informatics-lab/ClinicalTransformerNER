@@ -64,7 +64,7 @@ MODEL_CLASSES = {
 }
 
 
-ADVERSARIAL_TRAINING = {
+ADVERSARIAL_TRAINER = {
     "pgd": PGD,
     "fgm": FGM
 }
@@ -267,7 +267,7 @@ def train(args, model, train_features, dev_features):
     model.zero_grad()
 
     # apply ADVERSARIAL TRAINING
-    adversarial_trainer = ADVERSARIAL_TRAINING[args.adversarial_training_method](model) \
+    adversarial_trainer = ADVERSARIAL_TRAINER[args.adversarial_training_method](model) \
         if args.adversarial_training else None
 
     epoch_iter = trange(int(args.num_train_epochs), desc="Epoch", disable=False if args.progress_bar else True)

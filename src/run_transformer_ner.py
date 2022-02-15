@@ -110,12 +110,8 @@ def main():
     # fp16 and distributed training (we use pytorch naive implementation instead of Apex)
     parser.add_argument('--fp16', action='store_true',
                         help="Whether to use 16-bit float precision instead of 32-bit")
-    # parser.add_argument("--fp16_opt_level", type=str, default="O1",
-    #                     help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
-    #                          "See details at https://nvidia.github.io/apex/amp.html")
+    # data parallel - TODO: support single node multi GPUs
     # parser.add_argument("--local_rank", type=int, default=-1, help="local_rank for distributed training on gpus")
-    # parser.add_argument('--server_ip', type=str, default='', help="Can be used for distant debugging.")
-    # parser.add_argument('--server_port', type=str, default='', help="Can be used for distant debugging.")
 
     global_args = parser.parse_args()
 
