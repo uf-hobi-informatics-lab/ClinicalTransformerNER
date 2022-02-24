@@ -101,7 +101,7 @@ def save_only_transformer_core(args, model):
     if model_type == "bert":
         model_core = model.bert
     if model_type == "megatron":
-        model_core = model.megatron
+        model_core = model.bert
     elif model_type == "roberta":
         model_core = model.roberta
     elif model_type == "xlnet":
