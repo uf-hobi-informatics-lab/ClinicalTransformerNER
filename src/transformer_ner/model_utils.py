@@ -215,12 +215,12 @@ class FocalLoss(nn.Module):
 
 def _calculate_loss(logits, attention_mask, label_ids, loss_fct=None, num_labels=2):
     if attention_mask is not None:
-        active_idx = attention_mask.view(-1) == 1
-        active_logits = logits.view(-1, num_labels)[active_idx]
-        active_labels = label_ids.view(-1)[active_idx]
+        active_idx = attention_mask.reshape(-1) == 1
+        active_logits = logits.reshape(-1, num_labels)[active_idx]
+        active_labels = label_ids.reshape(-1)[active_idx]
     else:
-        active_logits = logits.view(-1, num_labels)
-        active_labels = label_ids.view(-1)
+        active_logits = logits.reshape(-1, num_labels)
+        active_labels = label_ids.reshape(-1)
 
     loss = loss_fct(active_logits, active_labels)
 

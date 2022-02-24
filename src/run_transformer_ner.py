@@ -10,6 +10,7 @@ import transformers
 from packaging import version
 
 from transformer_ner.task import run_task
+from transformer_biaffine_ner.task import run_task as run_biaffine_task
 from transformer_ner.transfomer_log import TransformerNERLogger
 
 pytorch_version = version.parse(transformers.__version__)
@@ -110,7 +111,7 @@ def main():
     # fp16 and distributed training (we use pytorch naive implementation instead of Apex)
     parser.add_argument('--fp16', action='store_true',
                         help="Whether to use 16-bit float precision instead of 32-bit")
-    # data parallel - TODO: support single node multi GPUs
+    #  TODO: data parallel - support single node multi GPUs (use deepspeed only or pytorch naive ddp?)
     # parser.add_argument("--local_rank", type=int, default=-1, help="local_rank for distributed training on gpus")
 
     global_args = parser.parse_args()
@@ -154,10 +155,10 @@ def main():
     if global_args.use_crf and global_args.use_biaffine:
         raise RuntimeError("You can not run both CRF and biaffine. Choose only one or None of them to proceed.")
 
-    # TODO: biaffine still use this as run interface, we need to add link to biaffine run below based on biaffine flag
     try:
         if global_args.use_biaffine:
             raise NotImplementedError("still under development")
+            run_biaffine_task(global_args)
         else:
             run_task(global_args)
     except Exception as ex:

@@ -25,8 +25,8 @@ from transformers import (ALBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
                           XLNetPreTrainedModel, DebertaV2Model, DebertaV2ForTokenClassification,
                           MegatronBertPreTrainedModel, MegatronBertModel, MegatronBertPreTrainedModel)
 
-from model_utils import FocalLoss, _calculate_loss
-from model_utils import New_Transformer_CRF as Transformer_CRF
+from transformer_ner.model_utils import FocalLoss, _calculate_loss
+from transformer_ner.model_utils import New_Transformer_CRF as Transformer_CRF
 
 
 class BertNerModel(BertPreTrainedModel):

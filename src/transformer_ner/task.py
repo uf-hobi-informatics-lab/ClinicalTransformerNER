@@ -20,6 +20,7 @@ import numpy as np
 import torch
 from torch.nn import CrossEntropyLoss
 from torch.nn import functional as F
+from torch.optim import AdamW
 from tqdm import tqdm, trange
 from transformers import (AlbertConfig, AlbertTokenizer, BartConfig,
                           BartTokenizer, BertConfig, BertTokenizer,
@@ -30,7 +31,6 @@ from transformers import (AlbertConfig, AlbertTokenizer, BartConfig,
                           DebertaV2Tokenizer, DebertaV2Config,
                           MegatronBertConfig,
                           get_linear_schedule_with_warmup)
-from torch.optim import AdamW
 
 from common_utils.bio_prf_eval import BioEval
 from common_utils.common_io import json_dump, json_load, output_bio
@@ -46,7 +46,7 @@ from transformer_ner.model import (AlbertNerModel, BartNerModel,
                                    ElectraNerModel, LongformerNerModel,
                                    RobertaNerModel, Transformer_CRF,
                                    DeBertaV2NerModel, MegatronNerModel)
-from model_utils import PGD, FGM
+from transformer_ner.model_utils import PGD, FGM
 
 
 MODEL_CLASSES = {
@@ -90,7 +90,8 @@ def load_model(args, new_model_dir=None):
         args.logger.error(traceback.format_exc())
         args.logger.warning(
             """The model seems save using model.save instead of model.state_dict,
-            attempt to directly using the loaded checkpoint as model.""")
+            attempt to directly using the loaded checkpoint as model.
+            May raise error. If raise error, you need to check the model load whether is correct or not""")
         model = ckpt
     return model
 
@@ -122,7 +123,7 @@ def save_only_transformer_core(args, model):
     else:
         args.logger.warning(
             "{} is current not supported for saving model core; we will skip saving to prevent error."
-                .format(args.model_type))
+            .format(args.model_type))
         return
     model_core.save_pretrained(args.new_model_dir)
 
@@ -245,7 +246,8 @@ def train(args, model, train_features, dev_features):
     args.logger.info("  Instantaneous batch size per GPU = {}".format(args.train_batch_size))
     args.logger.info("  Gradient Accumulation steps = {}".format(args.gradient_accumulation_steps))
     args.logger.info("  Total optimization steps = {}".format(t_total))
-    args.logger.info("  Training steps (number of steps between two evaluation on dev) = {}".format(args.train_steps*args.gradient_accumulation_steps))
+    args.logger.info("  Training steps (number of steps between two evaluation on dev) = {}".format(
+        args.train_steps * args.gradient_accumulation_steps))
     args.logger.info("******************************")
 
     # create directory to save model
@@ -255,7 +257,7 @@ def train(args, model, train_features, dev_features):
     json_dump(args.label2idx, new_model_dir / "label2idx.json")
 
     # save base model name to a base_model_name.txt
-    with open(new_model_dir/"base_model_name.txt", "w") as f:
+    with open(new_model_dir / "base_model_name.txt", "w") as f:
         f.write('model_type: {}\nbase_model: {}\nconfig: {}\ntokenizer: {}'.format(
             args.model_type, args.pretrained_model, args.config_name, args.tokenizer_name))
 
@@ -278,7 +280,7 @@ def train(args, model, train_features, dev_features):
 
             batch = tuple(b.to(args.device) for b in batch)
             train_inputs = batch_to_model_inputs(batch, args.model_type)
-            
+
             if args.fp16:
                 with autocast():
                     _, _, loss = model(**train_inputs)
@@ -306,10 +308,10 @@ def train(args, model, train_features, dev_features):
                 else:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                     optimizer.step()
-                
+
                 if args.do_warmup:
                     scheduler.step()
-                
+
                 model.zero_grad()
                 global_step += 1
 
@@ -324,7 +326,7 @@ def train(args, model, train_features, dev_features):
                 average_train_loss: {:.4f}; 
                 eval_loss: {:.4f}; 
                 current best score: {:.4f}""".format(
-                    global_step, epoch+1, round(tr_loss / global_step, 4), eval_loss, best_score))
+                    global_step, epoch + 1, round(tr_loss / global_step, 4), eval_loss, best_score))
 
         # default model select method using strict F1-score with beta=1; evaluate model after each epoch on dev
         if args.train_steps <= 0 or epoch == 0:
@@ -336,7 +338,7 @@ def train(args, model, train_features, dev_features):
                 average_train_loss: {:.4f}; 
                 eval_loss: {:.4f}; 
                 current best score: {:.4f}""".format(
-                    global_step, epoch+1, round(tr_loss / global_step, 4), eval_loss, best_score))
+                global_step, epoch + 1, round(tr_loss / global_step, 4), eval_loss, best_score))
 
         # early stop check
         if epcoh_best_score < best_score:
@@ -401,7 +403,7 @@ def _eval(args, model, features):
         for mks, lbs, lgts, gds in zip(original_mask, original_labels, raw_logits, guards):
             connect_sent_flag = False
             for mk, lb, lgt, gd in zip(mks, lbs, lgts, gds):
-                if mk == 0:  
+                if mk == 0:
                     # after hit first mask, we can stop for the current sentence since all rest will be pad
                     if args.model_type == "xlnet":
                         continue
@@ -423,7 +425,7 @@ def _eval(args, model, features):
             y_pred, y_true = [], []
             prev_gd = 0
 
-    return y_trues, y_preds, round(eval_loss/eval_size, 4)
+    return y_trues, y_preds, round(eval_loss / eval_size, 4)
 
 
 def evaluate(args, model, new_model_dir, features, epoch, global_step, best_score):
@@ -447,7 +449,7 @@ def evaluate(args, model, new_model_dir, features, epoch, global_step, best_scor
         previous best score: {:.4f}; 
         new best score: {:.4f}; 
         full evaluation metrix: {}
-        '''.format(global_step, epoch+1, best_score, cur_score, eval_metrix))
+        '''.format(global_step, epoch + 1, best_score, cur_score, eval_metrix))
         best_score = cur_score
         save_model(args, model, new_model_dir, global_step, latest=args.max_num_checkpoints)
 
@@ -508,7 +510,8 @@ def _output_bio(args, tests, preds):
             len(tokens), tokens, len(predicted_labels), predicted_labels)
         offsets = example.offsets
         if offsets:
-            new_sent = [(tk, ofs[0], ofs[1], ofs[2], ofs[3], lb) for tk, ofs, lb in zip(tokens, offsets, predicted_labels)]
+            new_sent = [(tk, ofs[0], ofs[1], ofs[2], ofs[3], lb) for tk, ofs, lb in
+                        zip(tokens, offsets, predicted_labels)]
         else:
             new_sent = [(tk, lb) for tk, lb in zip(tokens, predicted_labels)]
         new_sents.append(new_sent)
