@@ -361,6 +361,7 @@ def main(file1, file2):
     # evaluate.train_msg()
     os.remove(ofn)
 
+
 def test():
     a = [['O', 'O', 'B-misc', 'O', 'O', 'B-misc', 'I-misc', 'I-misc', 'I-misc', 'I-misc', 'O']]
     b = [['O', 'O', 'B-misc', 'O', 'O', 'B-misc', 'I-misc', 'O', 'O', 'B-misc', 'O']]
@@ -374,9 +375,8 @@ def test():
 
 
 if __name__ == "__main__":
-#     import sys
-#     import os
-#     f1 = sys.argv[1]
-#     f2 = sys.argv[2]
-#     main(f1, f2)
-    test()
+    import sys
+    f1 = sys.argv[1]
+    f2 = sys.argv[2]
+    main(f1, f2)
+    # test()
