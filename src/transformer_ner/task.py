@@ -29,8 +29,9 @@ from transformers import (AlbertConfig, AlbertTokenizer, BartConfig,
                           LongformerConfig, LongformerTokenizer, RobertaConfig,
                           RobertaTokenizer, XLNetConfig, XLNetTokenizer,
                           DebertaV2Tokenizer, DebertaV2Config,
-                          MegatronBertConfig,
-                          get_linear_schedule_with_warmup)
+                          MegatronBertConfig)
+# from transformers import get_linear_schedule_with_warmup
+from model_utils import get_linear_schedule_with_warmup
 
 from common_utils.bio_prf_eval import BioEval
 from common_utils.common_io import json_dump, json_load, output_bio
@@ -238,7 +239,7 @@ def train(args, model, train_features, dev_features):
     if args.do_warmup:
         warmup_steps = np.dtype('int64').type(args.warmup_ratio * t_total)
         scheduler = get_linear_schedule_with_warmup(
-            optimizer, num_warmup_steps=warmup_steps, num_training_steps=t_total)
+            optimizer, num_warmup_steps=warmup_steps, min_lr=args.min_lr, num_training_steps=t_total)
 
     args.logger.info("***** Running training *****")
     args.logger.info("  Num data points = {}".format(len(data_loader)))

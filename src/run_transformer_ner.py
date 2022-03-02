@@ -69,7 +69,9 @@ def main():
                         help="Number of trianing steps between two evaluations on the dev set; "
                              "if <0 then evaluate after each epoch")
     parser.add_argument("--learning_rate", default=1e-5, type=float,
-                        help="The initial learning rate for Adam.")
+                        help="The initial learning rate for optimizer.")
+    parser.add_argument("--min_lr", default=1e-6, type=float,
+                        help="The minimum number that lr can decay to.")
     parser.add_argument("--num_train_epochs", default=10, type=float,
                         help="Total number of training epochs to perform.")
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1,

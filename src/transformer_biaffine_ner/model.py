@@ -39,6 +39,7 @@ class Biaffine(nn.Module):
         super().__init__()
         self.bx = bias_x
         self.by = bias_y
+        # biaffine metrics
         self.U = nn.Parameter(
             torch.Tensor(input_dim + int(bias_x), output_dim, input_dim + int(bias_y)))
         # use _normal init; we can test other init method: xavier, kaiming, ones
