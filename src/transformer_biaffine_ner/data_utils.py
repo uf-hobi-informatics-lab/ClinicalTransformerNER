@@ -173,11 +173,11 @@ class TransformerNerBiaffineDataProcessor(object):
         return self.label2idx, list(self.label2idx.keys())
 
     def _read_data(self, file_name, task='train'):
-        assert task in {'train', 'test'}, 'task shoud be either train or test but got {}'.format(task)
+        assert task in {'train', 'test'}, 'task should be either train or test but got {}'.format(task)
         data = json_load(file_name)
 
         if len(data) == 0:
-            warnings.warn(f"{file_name} is empty")
+            self.logger.warning(f"{file_name} is empty")
             return [], set()
 
         unique_en_types = set()
@@ -230,6 +230,7 @@ class TransformerNerBiaffineDataProcessor(object):
 
     def _update_labels(self, entities, mapping):
         new_entities = []
+        self.logger.info("remapping the indexes of entities after tokenization...")
         for en in entities:
             text, ty, s_e = en[:3]
             s, e = s_e
@@ -258,7 +259,7 @@ class TransformerNerBiaffineDataProcessor(object):
 
         return labels, masks
 
-    def data2feature(self, examples):
+    def data2feature(self, examples, task="test"):
         features = []
         for example in tqdm.tqdm(examples, desc="examples2features"):
             tok_remap = dict()
@@ -276,6 +277,7 @@ class TransformerNerBiaffineDataProcessor(object):
                     check preprocessing to make the sentences shorter.")
 
             new_token_ids, attention_masks, token_type_ids = self._tokens2ids(new_tokens)
+            # TODO: in test, do we need to create labels and masks?
             # create 2D labels and masks based on token remapping and attention_masks
             new_entities = self._update_labels(entities, tok_remap)
             # print([e for e in new_tokens if e != "[PAD]"])
@@ -309,7 +311,7 @@ class TransformerNerBiaffineDataProcessor(object):
             self.logger.info(f"load {task} data from {fn}")
             dataset = pkl_load(fn)
         else:
-            dataset = self.data2feature(data)
+            dataset = self.data2feature(data, task)
         if self.cache and not fn.exists():
             self.logger.info(f"set cache to True so it will save {task} data at {fn}")
             pkl_dump(dataset, fn)
@@ -323,16 +325,17 @@ class TransformerNerBiaffineDataProcessor(object):
         else:
             sampler = SequentialSampler(dataset)
 
+        # TODO: Do we need multi num workers for data loader.  e.g., num_workers = 4
         data_loader = DataLoader(dataset, sampler=sampler, batch_size=batch_size, pin_memory=True)
         return data_loader
 
-    def train_data_loader(self, batch_size=4):
+    def get_train_data_loader(self, batch_size=4):
         return self._data_loader(task="train", batch_size=batch_size)
 
-    def test_data_loader(self, batch_size=4, to_tensor=True):
+    def get_test_data_loader(self, batch_size=4, to_tensor=True):
         return self._data_loader(task="test", batch_size=batch_size)
 
-    def dev_data_loader(self, batch_size=4, to_tensor=True):
+    def get_dev_data_loader(self, batch_size=4, to_tensor=True):
         return self._data_loader(task="dev", batch_size=batch_size)
 
 
@@ -348,6 +351,6 @@ if __name__ == "__main__":
 
     print(dp.get_labels())
 
-    for i, each in enumerate(dp.dev_data_loader(batch_size=3)):
+    for i, each in enumerate(dp.get_dev_data_loader(batch_size=3)):
         if i < 5:
             print(each[0].shape, each[-2].shape, each[-1].shape)

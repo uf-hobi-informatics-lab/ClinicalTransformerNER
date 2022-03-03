@@ -643,7 +643,7 @@ def run_task(args):
         if args.model_type in {"roberta", "bart", "longformer", "deberta"}:
             # we need to set add_prefix_space to True for roberta, longformer, and Bart (any tokenizer from GPT-2)
             tokenizer = model_tokenizer.from_pretrained(
-                args.tokenizer_name, do_lower_case=args.do_lower_case, add_prefix_space=True)
+                args.new_model_dir, do_lower_case=args.do_lower_case, add_prefix_space=True)
         else:
             args.tokenizer = model_tokenizer.from_pretrained(args.new_model_dir, do_lower_case=args.do_lower_case)
         model = load_model(args)

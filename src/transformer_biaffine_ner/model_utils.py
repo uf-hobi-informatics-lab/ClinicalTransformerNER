@@ -5,9 +5,9 @@
 
 def biaffine_loss_calculation(preds, labels, masks, loss_func, num_labels):
     active_idx = masks.view(-1) == 1
-    preds = preds.reshape(-1, preds.shape[-1])
-    preds_masked = preds[active_idx]
-    labels_masked = labels[active_idx]
+    # preds = preds.reshape(-1, preds.shape[-1])
+    preds_masked = preds.view(-1)[active_idx]
+    labels_masked = labels.view(-1)[active_idx]
 
     loss = loss_func(preds_masked, labels_masked)
 

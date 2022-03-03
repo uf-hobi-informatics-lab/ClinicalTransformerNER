@@ -121,11 +121,14 @@ class BiaffineLayer(nn.Module):
         return logits, loss
 
 
-class TransformerBiaffineNerModel(PreTrainedModel):
+class TransformerBiaffineNerModel(nn.Module):
     def __init__(self, config, model_path):
-        super().__init__(config)
+        super().__init__()
         self.lm = AutoModel.from_pretrained(model_path, config=config)
         self.biaffine = BiaffineLayer(config)
+
+    def resize_token_embeddings(self, new_size):
+        self.lm.resize_token_embeddings(new_size)
 
     def forward(self,
                 input_ids=None,
