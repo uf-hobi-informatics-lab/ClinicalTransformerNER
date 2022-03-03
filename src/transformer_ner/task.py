@@ -273,9 +273,9 @@ def train(args, model, train_features, dev_features):
     adversarial_trainer = ADVERSARIAL_TRAINER[args.adversarial_training_method](model) \
         if args.adversarial_training else None
 
-    epoch_iter = trange(int(args.num_train_epochs), desc="Epoch", disable=False if args.progress_bar else True)
+    epoch_iter = trange(int(args.num_train_epochs), desc="Epoch", disable=not args.progress_bar)
     for epoch in epoch_iter:
-        batch_iter = tqdm(iterable=data_loader, desc='Batch', disable=False if args.progress_bar else True)
+        batch_iter = tqdm(iterable=data_loader, desc='Batch', disable=not args.progress_bar)
         for step, batch in enumerate(batch_iter):
             model.train()
 
@@ -443,7 +443,7 @@ def evaluate(args, model, new_model_dir, features, epoch, global_step, best_scor
 
     # select model based on best score
     # if best_score < cur_score:
-    if cur_score - best_score > 0.00005:
+    if cur_score - best_score > 1e-5:
         args.logger.info('''
         Global step: {}; 
         Epoch: {}; 

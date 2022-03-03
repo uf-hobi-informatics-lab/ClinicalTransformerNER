@@ -134,15 +134,6 @@ class RobertaNerModel(BertPreTrainedModel):
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
-            # if attention_mask is not None:
-            #     active_idx = attention_mask.view(-1) == 1
-            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
-            #     active_labels = label_ids.view(-1)[active_idx]
-            # else:
-            #     active_logits = logits.view(-1, self.num_labels)
-            #     active_labels = label_ids.view(-1)
-            #
-            # loss = self.loss_fct(active_logits, active_labels)
             loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
@@ -198,16 +189,6 @@ class LongformerNerModel(LongformerForTokenClassification):
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
-            # if attention_mask is not None:
-            #     active_idx = attention_mask.view(-1) == 1
-            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
-            #     active_labels = label_ids.view(-1)[active_idx]
-            # else:
-            #     active_logits = logits.view(-1, self.num_labels)
-            #     active_labels = label_ids.view(-1)
-            #
-            # # loss_fct = nn.CrossEntropyLoss()
-            # loss = self.loss_fct(active_logits, active_labels)
             loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
@@ -255,15 +236,6 @@ class AlbertNerModel(AlbertPreTrainedModel):
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
-            # if attention_mask is not None:
-            #     active_idx = attention_mask.view(-1) == 1
-            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
-            #     active_labels = label_ids.view(-1)[active_idx]
-            # else:
-            #     active_logits = logits.view(-1, self.num_labels)
-            #     active_labels = label_ids.view(-1)
-            #
-            # loss = self.loss_fct(active_logits, active_labels)
             loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
@@ -315,15 +287,6 @@ class DistilBertNerModel(BertPreTrainedModel):
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
-            # if attention_mask is not None:
-            #     active_idx = attention_mask.view(-1) == 1
-            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
-            #     active_labels = label_ids.view(-1)[active_idx]
-            # else:
-            #     active_logits = logits.view(-1, self.num_labels)
-            #     active_labels = label_ids.view(-1)
-            #
-            # loss = self.loss_fct(active_logits, active_labels)
             loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
@@ -452,16 +415,6 @@ class BartNerModel(PreTrainedModel):
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
-            # if attention_mask is not None:
-            #     active_idx = attention_mask.view(-1) == 1
-            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
-            #     active_labels = label_ids.view(-1)[active_idx]
-            # else:
-            #     active_logits = logits.view(-1, self.num_labels)
-            #     active_labels = label_ids.view(-1)
-            #
-            # # loss_fct = nn.CrossEntropyLoss()
-            # loss = self.loss_fct(active_logits, active_labels)
             loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
@@ -524,15 +477,6 @@ class ElectraNerModel(ElectraForTokenClassification):
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
-            # if attention_mask is not None:
-            #     active_idx = attention_mask.view(-1) == 1
-            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
-            #     active_labels = label_ids.view(-1)[active_idx]
-            # else:
-            #     active_logits = logits.view(-1, self.num_labels)
-            #     active_labels = label_ids.view(-1)
-            #
-            # loss = self.loss_fct(active_logits, active_labels)
             loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
@@ -593,15 +537,6 @@ class DeBertaNerModel(DebertaPreTrainedModel):
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
-            # if attention_mask is not None:
-            #     active_idx = attention_mask.view(-1) == 1
-            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
-            #     active_labels = label_ids.view(-1)[active_idx]
-            # else:
-            #     active_logits = logits.view(-1, self.num_labels)
-            #     active_labels = label_ids.view(-1)
-            #
-            # loss = self.loss_fct(active_logits, active_labels)
             loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
@@ -660,15 +595,6 @@ class DeBertaV2NerModel(DebertaV2ForTokenClassification):
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
-            # if attention_mask is not None:
-            #     active_idx = attention_mask.view(-1) == 1
-            #     active_logits = logits.view(-1, self.num_labels)[active_idx]
-            #     active_labels = label_ids.view(-1)[active_idx]
-            # else:
-            #     active_logits = logits.view(-1, self.num_labels)
-            #     active_labels = label_ids.view(-1)
-            #
-            # loss = self.loss_fct(active_logits, active_labels)
             loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
 
         return logits, active_logits, loss
