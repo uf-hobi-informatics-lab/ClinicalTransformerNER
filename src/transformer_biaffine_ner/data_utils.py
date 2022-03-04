@@ -13,8 +13,6 @@ import torch
 from torch.nn import CrossEntropyLoss
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 from common_utils.common_io import read_from_file, pkl_load, pkl_dump, json_load
-from transformers import (BertTokenizer, DistilBertTokenizer, ElectraTokenizer, DebertaTokenizer, DebertaV2Tokenizer,
-                          RobertaTokenizer, BartTokenizer, LongformerTokenizer, AlbertTokenizer, XLNetTokenizer)
 
 
 class InputFeature(object):
@@ -114,14 +112,18 @@ def convert_features_to_tensors(features):
 
 
 class TransformerNerBiaffineDataProcessor(object):
-    def __init__(self, data_dir=None, logger=None, tokenizer=None, max_seq_len=512, cache=True):
+    def __init__(self, data_dir=None, logger=None, tokenizer=None, max_seq_len=512, cache=True, tokenizer_type=None):
         self.data_dir = Path(data_dir) if data_dir else None
         self.logger = logger
         self.tokenizer = tokenizer
         self.max_seq_len = max_seq_len
         self.cache = cache
+        self.tokenizer_type = tokenizer_type
         # label2idx: we do not need to distiguish all un-entity tokens, set all as 0
         self.label2idx = {'O': 0, 'X': 0, 'PAD': 0, 'CLS': 0, 'SEP': 0}
+
+    def set_cache(self, cache):
+        self.cache = cache
 
     def set_logger(self, logger):
         self.logger = logger
@@ -134,6 +136,9 @@ class TransformerNerBiaffineDataProcessor(object):
 
     def set_tokenizer(self, tokenizer):
         self.tokenizer = tokenizer
+
+    def set_tokenizer_type(self, tokenizer_type):
+        self.tokenizer_type = tokenizer_type
 
     def get_train_examples(self):
         input_file_name = self.data_dir / "train.json"
@@ -191,22 +196,16 @@ class TransformerNerBiaffineDataProcessor(object):
         return data, unique_en_types
 
     def _tokens2ids(self, tokens):
-        if isinstance(self.tokenizer, BertTokenizer) or \
-                isinstance(self.tokenizer, DistilBertTokenizer) or \
-                isinstance(self.tokenizer, ElectraTokenizer) or \
-                isinstance(self.tokenizer, DebertaV2Tokenizer) or \
-                isinstance(self.tokenizer, DebertaTokenizer):
+        if self.tokenizer_type in {"bert", "distilbert", "electra", "deberta", "deberta-v2", "megatron"}:
             s_tk, e_tk, pad_tk = '[CLS]', '[SEP]', '[PAD]'
-        elif isinstance(self.tokenizer, RobertaTokenizer) or \
-                isinstance(self.tokenizer, BartTokenizer) or \
-                isinstance(self.tokenizer, LongformerTokenizer):
+        elif self.tokenizer_type in {'roberta', 'longformer', 'bart'}:
             s_tk, e_tk, pad_tk = '<s>', '</s>', '<pad>'
-        elif isinstance(self.tokenizer, XLNetTokenizer):
+        elif self.tokenizer_type == "xlnet":
             raise NotImplementedError("We do not support XLNet for Biaffine NER.")
-        elif isinstance(self.tokenizer, AlbertTokenizer):
+        elif self.tokenizer_type == "albert":
             s_tk, e_tk, pad_tk = '[CLS]', '[SEP]', '<pad>'
         else:
-            raise RuntimeError("The current package does not support tokenizer: {}.".format(type(tokenizer)))
+            raise RuntimeError("The current package does not support tokenizer: {}.".format(self.tokenizer_type))
 
         # single sequence: ``cls X X X sep pad ...``
         tokens.insert(0, s_tk)
@@ -220,7 +219,7 @@ class TransformerNerBiaffineDataProcessor(object):
             attention_masks.append(0)
             cur_len += 1
 
-        new_token_ids = tokenizer.convert_tokens_to_ids(tokens)
+        new_token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
         token_type_ids = [0] * self.max_seq_len
 
         assert len(new_token_ids) + len(token_type_ids) + len(attention_masks) == self.max_seq_len * 3, \
@@ -230,7 +229,7 @@ class TransformerNerBiaffineDataProcessor(object):
 
     def _update_labels(self, entities, mapping):
         new_entities = []
-        self.logger.info("remapping the indexes of entities after tokenization...")
+        self.logger.debug("remapping the indexes of entities after tokenization...")
         for en in entities:
             text, ty, s_e = en[:3]
             s, e = s_e
@@ -259,6 +258,54 @@ class TransformerNerBiaffineDataProcessor(object):
 
         return labels, masks
 
+    def _helper_data2feature_parallel(self, examples):
+        temp = []
+
+        for example in tqdm.tqdm(examples, desc="examples2features"):
+            tok_remap = dict()
+            tokens = example["tokens"]
+            entities = example["entities"]
+            new_tokens = []
+            for idx, tok in enumerate(tokens):
+                new_toks = self.tokenizer.tokenize(tok)
+                tok_remap[idx] = (len(new_tokens), len(new_tokens) + len(new_toks) - 1)
+                new_tokens.extend(new_toks)
+
+            if len(new_tokens) > (self.max_seq_len - 4):
+                warnings.warn(
+                    f"example: {example}\nthe tokens are too many and will cause truncate which leads to error\n \
+                    check preprocessing to make the sentences shorter.")
+
+            new_token_ids, attention_masks, token_type_ids = self._tokens2ids(new_tokens)
+            # TODO: in test, do we need to create labels and masks? quite MEM intensive
+            # TODO: consider generating labels/masks using data collate_fn on fly
+            # create 2D labels and masks based on token remapping and attention_masks
+            new_entities = self._update_labels(entities, tok_remap)
+            # print([e for e in new_tokens if e != "[PAD]"])
+            # print(entities, new_entities)
+            labels, masks = self._create_labels_and_masks(new_entities, attention_masks)
+
+            feature = InputFeature(input_tokens=" ".join(new_tokens),
+                                   input_ids=new_token_ids,
+                                   attention_masks=attention_masks,
+                                   token_type_ids=token_type_ids,
+                                   labels=labels,
+                                   masks=masks
+                                   )
+            temp.append(feature)
+
+        return temp
+
+    def data2feature_parallel(self, examples, task="test"):
+        from concurrent.futures import ProcessPoolExecutor
+        features = []
+        batch_examples = np.array_split(examples, 8)
+        with ProcessPoolExecutor(max_workers=8) as pool:
+            for each in pool.map(self._helper_data2feature_parallel, batch_examples):
+                features.extend(each)
+
+        return features
+
     def data2feature(self, examples, task="test"):
         features = []
         for example in tqdm.tqdm(examples, desc="examples2features"):
@@ -271,13 +318,14 @@ class TransformerNerBiaffineDataProcessor(object):
                 tok_remap[idx] = (len(new_tokens), len(new_tokens) + len(new_toks) - 1)
                 new_tokens.extend(new_toks)
 
-            if len(new_tokens) > 508:
+            if len(new_tokens) > (self.max_seq_len - 4):
                 warnings.warn(
-                    f"example: {example}\nthe tokens are too many and will cause truncate\n \
+                    f"example: {example}\nthe tokens are too many and will cause truncate which leads to error\n \
                     check preprocessing to make the sentences shorter.")
 
             new_token_ids, attention_masks, token_type_ids = self._tokens2ids(new_tokens)
-            # TODO: in test, do we need to create labels and masks?
+            # TODO: in test, do we need to create labels and masks? quite MEM intensive
+            # TODO: consider generating labels/masks using data collate_fn on fly
             # create 2D labels and masks based on token remapping and attention_masks
             new_entities = self._update_labels(entities, tok_remap)
             # print([e for e in new_tokens if e != "[PAD]"])

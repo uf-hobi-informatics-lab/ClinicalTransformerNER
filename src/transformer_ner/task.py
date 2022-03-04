@@ -31,7 +31,6 @@ from transformers import (AlbertConfig, AlbertTokenizer, BartConfig,
                           DebertaV2Tokenizer, DebertaV2Config,
                           MegatronBertConfig)
 # from transformers import get_linear_schedule_with_warmup
-from model_utils import get_linear_schedule_with_warmup
 
 from common_utils.bio_prf_eval import BioEval
 from common_utils.common_io import json_dump, json_load, output_bio
@@ -47,7 +46,7 @@ from transformer_ner.model import (AlbertNerModel, BartNerModel,
                                    ElectraNerModel, LongformerNerModel,
                                    RobertaNerModel, Transformer_CRF,
                                    DeBertaV2NerModel, MegatronNerModel)
-from transformer_ner.model_utils import PGD, FGM
+from transformer_ner.model_utils import PGD, FGM, get_linear_schedule_with_warmup
 
 
 MODEL_CLASSES = {

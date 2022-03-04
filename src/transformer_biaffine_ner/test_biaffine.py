@@ -1,9 +1,10 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
+# coding=utf-8
+# Created by bugface (https://github.com/bugface)
+# First created at 3/4/22
 import sys
 from pathlib import Path
 
-from transformer_ner.task import run_task
+from transformer_biaffine_ner.task import run_task
 from transformer_ner.transfomer_log import TransformerNERLogger
 
 
@@ -16,14 +17,14 @@ class Args:
         self.tokenizer_name = self.pretrained_model
         self.do_lower_case = True
         self.overwrite_model_dir = True
-        self.data_dir = Path(__file__).resolve().parent.parent.parent / 'test_data/conll-2003'
+        self.data_dir = Path(__file__).resolve().parent.parent.parent / 'test_data/biaffine_conll2003'
         self.data_has_offset_information = False
         self.new_model_dir = new_model_dir if new_model_dir is not None else Path(
-            __file__).resolve().parent.parent.parent / f'new_ner_model/{model_type}_new_ner_model'
+            __file__).resolve().parent.parent.parent / f'new_ner_model/{model_type}_biaffine_ner_model'
         self.predict_output_file = Path(
-            __file__).resolve().parent.parent.parent / f"new_ner_model/{model_type}_new_ner_model/pred.txt"
+            __file__).resolve().parent.parent.parent / f"new_ner_model/{model_type}_biaffine_ner_model/pred.json"
         self.overwrite_output_dir = True
-        self.max_seq_length = 16
+        self.max_seq_length = 512
         self.do_train = do_train
         self.do_predict = do_predict
         self.model_selection_scoring = "strict-f_score-1"
@@ -51,66 +52,32 @@ class Args:
         self.local_rank = -1
         self.device = "cpu"
         self.train_steps = 10
-        self.early_stop = -1
+        self.early_stop = 3
         self.progress_bar = True
-        self.save_model_core = True
+        self.save_model_core = False
         self.use_crf = False
         self.focal_loss = False
         self.focal_loss_gamma = 2
         self.resume_from_model = resume_from_model
-        self.use_biaffine = False
+        self.use_biaffine = True
         self.mlp_dim = 128
         self.mlp_layers = 0
         self.adversarial_training_method = None  # None, "fgm", "pgd"
 
 
 def test():
-    # test training
-    for each in [
-        ('bert', 'bert-base-uncased'),
-        ('deberta-v2', "microsoft/deberta-xlarge-v2"),
-        ("megatron",
-         "/Users/alexgre/workspace/py3/HOBI-lab/models/345m_uf_full_deid_pubmed_mimic_wiki_fullcased50k_release"),
-        ('deberta', "microsoft/deberta-base"),
-        ('roberta', 'roberta-base'),
-        ('xlnet', 'xlnet-base-cased')
-    ]:
-        args = Args(each[0], each[1], do_train=True, do_predict=False)
-        run_task(args)
+    args = Args("bert", "bert-base-uncased", do_train=True, do_predict=False)
+    run_task(args)
 
 
 def test1():
-    # test prediction
-    args = Args("bert", 'bert-base-uncased', do_train=False, do_predict=True,
-                new_model_dir=Path(
-                    __file__).resolve().parent.parent.parent / "new_ner_model" / "bert-base-uncased_conll2003")
-    run_task(args)
-
-
-def test2():
-    # test continuous training from existing NER model
-    args = Args("bert", 'bert-base-uncased', do_train=True, do_predict=True,
-                resume_from_model=Path(
-                    __file__).resolve().parent.parent.parent / "new_ner_model" / "bert-base-uncased_conll2003")
-    run_task(args)
-
-
-def test3():
-    # test prediction
-    args = Args("bert", 'bert-base-uncased', do_train=True, do_predict=True,
-                new_model_dir=Path(
-                    __file__).resolve().parent.parent.parent / "new_ner_model" / "bert-base-uncased_conll2003")
-    args.use_crf = True
+    args = Args("bert", "bert-base-uncased", do_train=False, do_predict=True)
     run_task(args)
 
 
 if __name__ == '__main__':
-    which_test = input("run which test? 1 or 2 or 3")
+    which_test = input("run which test? 0 or 1")
     if which_test == "0":
         test()
     elif which_test == "1":
         test1()
-    elif which_test == "2":
-        test2()
-    elif which_test == "3":
-        test3()

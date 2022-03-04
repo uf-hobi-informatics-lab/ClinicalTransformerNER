@@ -35,16 +35,19 @@ def run_task(args):
     data_processor.set_data_dir(args.data_dir)
     data_processor.set_logger(args.logger)
     data_processor.set_max_seq_len(args.max_seq_length)
+    data_processor.set_tokenizer_type(args.model_type)
+    # we default to cache all the preprocessed data/ you need to manually delete them from data directory
+    data_processor.set_cache(True)
 
     if args.do_train:
         # create tokenizer and add it to data processor
         args.tokenizer = get_tokenizer(args, is_train=True)
         data_processor.set_tokenizer(args.tokenizer)
+
         # create config; we need to get the num_labels before get config
         label2idx, _ = data_processor.get_labels()
         args.label2idx = label2idx
-        args.num_classes, args.idx2label = _get_unique_num_classes
-        args.config.num_labels = args.num_classes
+        args.num_classes, args.idx2label = _get_unique_num_classes(label2idx)
         args.config = get_config(args, is_train=True)
         args.config.vocab_size = len(args.tokenizer)
         args.config.mlp_dim = args.mlp_dim
@@ -75,7 +78,8 @@ def run_task(args):
 
 
 def _get_unique_num_classes(label2idx):
-    idx2label = {v: k for k, v in label2idx if v != 0}
-    num_classes = len(idx2label)
+    idx2label = {v: k for k, v in label2idx.items() if v != 0}
+    # we need to include 0
+    num_classes = len(idx2label) + 1
 
     return num_classes, idx2label

@@ -171,10 +171,11 @@ def train(args, train_data_loader, dev_data_loader):
         batch_iter = tqdm(iterable=train_data_loader, desc='Batch', disable=not args.progress_bar)
         for step, batch in enumerate(batch_iter):
             _train_step(args, model, batch, step)
-            args.global_step += 1
+            global_step += 1
 
             # using training step
-            if args.train_steps > 0 and (args.global_step + 1) % args.train_steps == 0 and args.epoch > 0:
+            # TODO: change back - and args.epoch > 0
+            if args.train_steps > 0 and (global_step + 1) % args.train_steps == 0:
                 # the current implementation will skip the all evaluations in the first epoch
                 best_score, pre, rec, eval_loss = _evaluate(
                     args, best_score, model, new_model_dir, global_step, dev_data_loader)
@@ -187,8 +188,8 @@ def train(args, train_data_loader, dev_data_loader):
                                 precision: {:.4f};
                                 recall: {:.4f};
                                 current best F1 score: {:.4f}""".format(
-                    args.global_step, epoch + 1,
-                    round(args.tr_loss / args.global_step, 4),
+                    global_step, epoch + 1,
+                    round(args.tr_loss / global_step, 4),
                     eval_loss,
                     pre,
                     rec,
@@ -206,8 +207,8 @@ def train(args, train_data_loader, dev_data_loader):
                             precision: {:.4f};
                             recall: {:.4f};
                             current best F1 score: {:.4f}""".format(
-                args.global_step, epoch + 1,
-                round(args.tr_loss / args.global_step, 4),
+                global_step, epoch + 1,
+                round(args.tr_loss / global_step, 4),
                 eval_loss,
                 pre,
                 rec,
@@ -239,7 +240,7 @@ def _train_step(args, model, current_batch, current_step):
         _, loss = model(**train_inputs)
 
     loss = loss / args.gradient_accumulation_steps
-    args.train_loss += loss.item()
+    args.tr_loss += loss.item()
 
     if args.fp16:
         args.scaler.scale(loss).backward()
@@ -339,6 +340,5 @@ def get_config(args, is_train=True):
     else:
         config_path = args.new_model_dir
 
-    config = AutoConfig.from_pretrained(config_path, num_labels=args.num_labels)
-
+    config = AutoConfig.from_pretrained(config_path, num_labels=args.num_classes)
     return config

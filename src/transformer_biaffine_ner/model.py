@@ -4,7 +4,6 @@
 
 import torch
 from torch import nn
-from model_utils import biaffine_loss_calculation
 from transformers import AutoModel, AutoConfig, PreTrainedModel
 
 
@@ -112,13 +111,26 @@ class BiaffineLayer(nn.Module):
         self.ffnne = MLP(mlp_input_dim, mlp_output_dim, config.mlp_dim, config.mlp_layers)
         self.biaffine = Biaffine(mlp_output_dim, config.num_labels)
         self.loss_fct = nn.CrossEntropyLoss()
+        self.config = config
+
+    def biaffine_loss_calculation(self, preds, labels, masks):
+        active_idx = masks.view(-1) == 1
+
+        preds = preds.reshape(-1, self.config.num_labels)
+        preds_masked = preds[active_idx]
+
+        labels_masked = labels.view(-1)[active_idx]
+
+        loss = self.loss_fct(preds_masked, labels_masked)
+
+        return loss
 
     def forward(self, x, labels=None, loss_mask=None):
         s_logits = self.ffnns(x)
         e_logits = self.ffnne(x)
         logits = self.biaffine(s_logits, e_logits)
 
-        loss, _ = biaffine_loss_calculation(logits, labels, loss_mask, self.loss_fct)
+        loss = self.biaffine_loss_calculation(logits, labels, loss_mask)
 
         return logits, loss
 

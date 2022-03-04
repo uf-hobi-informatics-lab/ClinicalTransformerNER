@@ -9,7 +9,12 @@ from common_utils.output_format_converter import biaffine2brat, biaffine2bio
 
 
 def main(args):
-    pass
+    if args.do_format:
+        # to brat
+        pass
+    else:
+        # to bio
+        pass
 
 
 if __name__ == '__main__':
@@ -23,7 +28,7 @@ if __name__ == '__main__':
     parser.add_argument("--formatted_output_dir", type=str, required=True,
                         help="The final output data directory.")
     parser.add_argument("--do_format", default=0, type=int,
-                        help="0=bio (not format change will be applied); 1=brat; 2=bioc")
+                        help="0=bio; 1=brat")
     parser.add_argument("--do_copy", action='store_true',
                         help="if copy the original plain text to output folder")
     global_args = parser.parse_args()
