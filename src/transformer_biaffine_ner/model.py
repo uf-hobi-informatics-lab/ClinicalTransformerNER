@@ -136,9 +136,9 @@ class BiaffineLayer(nn.Module):
 
 
 class TransformerBiaffineNerModel(nn.Module):
-    def __init__(self, config, model_path):
+    def __init__(self, config):
         super().__init__()
-        self.lm = AutoModel.from_pretrained(model_path, config=config)
+        self.lm = AutoModel.from_pretrained(config.base_model_path, config=config)
         self.biaffine = BiaffineLayer(config)
 
     def resize_token_embeddings(self, new_size):

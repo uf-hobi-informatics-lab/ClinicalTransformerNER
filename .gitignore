@@ -7,3 +7,4 @@ new_ner_model
 */.ipynb_checkpoints
 /.ipynb_checkpoints/
 /test/
+/test_data/biaffine_conll2003_mini/

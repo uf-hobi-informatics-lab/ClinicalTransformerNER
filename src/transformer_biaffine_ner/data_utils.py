@@ -140,6 +140,9 @@ class TransformerNerBiaffineDataProcessor(object):
     def set_tokenizer_type(self, tokenizer_type):
         self.tokenizer_type = tokenizer_type
 
+    def set_label2idx(self, label2idx):
+        self.label2idx = label2idx
+
     def get_train_examples(self):
         input_file_name = self.data_dir / "train.json"
         data, _unique_labels = self._read_data(input_file_name, task='train')

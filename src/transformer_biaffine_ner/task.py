@@ -4,10 +4,11 @@
 
 from pathlib import Path
 
-from common_utils.common_io import json_dump
+from common_utils.common_io import json_dump, json_load
 from transformer_biaffine_ner.task_utils import train, predict, get_tokenizer, get_config
 from transformer_biaffine_ner.data_utils import TransformerNerBiaffineDataProcessor
 from transformer_ner.task import set_seed
+from transformers import AutoModel
 
 
 def run_task(args):
@@ -29,6 +30,7 @@ def run_task(args):
             """new model directory: {} exists. 
             Use --overwrite_model_dir to overwrite the previous model. 
             Or create another directory for the new model""".format(args.new_model_dir))
+    new_model_dir_path.mkdir(parents=True, exist_ok=True)
 
     # init data preprocessor
     data_processor = TransformerNerBiaffineDataProcessor()
@@ -49,9 +51,18 @@ def run_task(args):
         args.label2idx = label2idx
         args.num_classes, args.idx2label = _get_unique_num_classes(label2idx)
         args.config = get_config(args, is_train=True)
+        args.config.num_labels = args.num_classes
+        args.config.label2idx = args.label2idx
         args.config.vocab_size = len(args.tokenizer)
         args.config.mlp_dim = args.mlp_dim
         args.config.mlp_layers = args.mlp_layers
+        args.logger.info(f"load pretrained model from {args.pretrained_model}")
+        args.config.base_model_path = args.pretrained_model
+
+        # we need to save pretrained_model to new_model_dir
+        # in this way we can init transformer when we do prediction
+        AutoModel.from_pretrained(args.config.base_model_path).save_pretrained(args.new_model_dir)
+        args.config.base_model_path = args.new_model_dir
 
         # get train, dev data loader
         train_data_loader = data_processor.get_train_data_loader()
@@ -59,18 +70,17 @@ def run_task(args):
 
         train(args, train_data_loader, dev_data_loader)
 
-        args.tokenizer.save_pretrained(args.new_model_dir)
-        args.config.save_pretrained(args.new_model_dir)
-
     if args.do_predict:
         args.tokenizer = get_tokenizer(args, is_train=False)
         data_processor.set_tokenizer(args.tokenizer)
+        data_processor.set_label2idx(json_load(Path(args.new_model_dir) / "label2idx.json"))
         test_data_loader = data_processor.get_test_data_loader()
 
         args.config = get_config(args, is_train=False)
         # predict_results format: [{"tokens": [xx ...], "entities": [(en, en_type, s, e) ...]}]
         predicted_results = predict(args, test_data_loader)
 
+        print(predicted_results)
         # we just output json formatted results
         # we let users to do reformat using run_format_biaffine_output.py
         output_fn = args.predict_output_file if args.predict_output_file else Path(args.new_model_dir) / "predicts.json"

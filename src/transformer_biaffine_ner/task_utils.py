@@ -1,6 +1,7 @@
 # coding=utf-8
 # Created by bugface (https://github.com/bugface)
 # First created at 12/31/21
+import traceback
 
 import numpy as np
 from pathlib import Path
@@ -12,7 +13,7 @@ from torch.nn.utils import clip_grad_norm_
 
 from common_utils.common_io import json_dump, write_to_file
 from transformer_ner.model_utils import PGD, FGM, get_linear_schedule_with_warmup
-from transformer_ner.task import save_model, load_model
+from transformer_ner.task import save_model
 from transformer_biaffine_ner.model import TransformerBiaffineNerModel
 from transformer_biaffine_ner.data_utils import batch_to_model_inputs
 from transformers import AutoTokenizer, AutoConfig, get_constant_schedule_with_warmup
@@ -113,7 +114,7 @@ def predict(args, data_loader):
     args.logger.info("******************************")
 
     # set up model
-    model = load_model(args.new_model_dir)
+    model = load_model(args)
     model.to(args.device)
 
     _, preds, tok_ids, _ = _get_predictions(args, model, data_loader)
@@ -125,7 +126,8 @@ def predict(args, data_loader):
         output = []
         for each in pred:
             en_type_id, s, e = each
-            en = args.tokenizer.decode(tok_id[s:e+1]).strip()
+            # TODO: decode remap index is wrong here
+            en = args.tokenizer.decode(tok_id[s: e+1]).strip()
             ll = len(en.split())
             new_s = s
             new_e = s + ll  # note we include extra pos here; we do not need to do [s: e+1] instead use [s:e] later
@@ -138,7 +140,7 @@ def predict(args, data_loader):
 
 def train(args, train_data_loader, dev_data_loader):
     # setup model
-    model = TransformerBiaffineNerModel(args.config, args.pretrained_model)
+    model = TransformerBiaffineNerModel(args.config)
     model.resize_token_embeddings(args.config.vocab_size)
     model.to(args.device)
 
@@ -173,8 +175,7 @@ def train(args, train_data_loader, dev_data_loader):
             _train_step(args, model, batch, step)
             global_step += 1
 
-            # using training step
-            # TODO: change back - and args.epoch > 0
+            # using training step and args.epoch > 0
             if args.train_steps > 0 and (global_step + 1) % args.train_steps == 0:
                 # the current implementation will skip the all evaluations in the first epoch
                 best_score, pre, rec, eval_loss = _evaluate(
@@ -193,7 +194,7 @@ def train(args, train_data_loader, dev_data_loader):
                     eval_loss,
                     pre,
                     rec,
-                    args.best_score))
+                    best_score))
 
         if args.train_steps <= 0 or epoch == 0:
             best_score, pre, rec, eval_loss = _evaluate(
@@ -212,10 +213,10 @@ def train(args, train_data_loader, dev_data_loader):
                 eval_loss,
                 pre,
                 rec,
-                args.best_score))
+                best_score))
 
         # early stop check
-        if best_score - args.epcoh_best_score > 1e-5:
+        if best_score - epcoh_best_score > 1e-5:
             epcoh_best_score = best_score
             early_stop_flag = 0
         else:
@@ -337,8 +338,34 @@ def get_tokenizer(args, is_train=True):
 def get_config(args, is_train=True):
     if is_train:
         config_path = args.config_name
+        config = AutoConfig.from_pretrained(config_path, num_labels=args.num_classes)
     else:
         config_path = args.new_model_dir
-
-    config = AutoConfig.from_pretrained(config_path, num_labels=args.num_classes)
+        config = AutoConfig.from_pretrained(config_path)
     return config
+
+
+def load_model(args):
+    model_dir = Path(args.new_model_dir)
+
+    all_model_files = model_dir.glob("*.bin")
+    all_model_files = list(filter(lambda x: 'checkpoint_' in x.as_posix(), all_model_files))
+    sorted_file = sorted(all_model_files, key=lambda x: int(x.stem.split("_")[-1]))
+
+    # #load direct from model files
+    args.logger.info("load checkpoint from {}".format(sorted_file[-1]))
+    ckpt = torch.load(sorted_file[-1], map_location=torch.device('cpu'))
+
+    # #load model as state_dict
+    try:
+        model = TransformerBiaffineNerModel
+        model = model(config=args.config)
+        model.load_state_dict(state_dict=ckpt)
+    except AttributeError as Ex:
+        args.logger.error(traceback.format_exc())
+        args.logger.warning(
+            """The model seems save using model.save instead of model.state_dict,
+            attempt to directly using the loaded checkpoint as model.
+            May raise error. If raise error, you need to check the model load whether is correct or not""")
+        model = ckpt
+    return model

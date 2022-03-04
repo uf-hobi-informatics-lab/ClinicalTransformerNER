@@ -9,20 +9,22 @@ from transformer_ner.transfomer_log import TransformerNERLogger
 
 
 class Args:
-    def __init__(self, model_type, pretrained_model, do_train=True, do_predict=True,
-                 new_model_dir=None, resume_from_model=None):
+    def __init__(self, model_type, pretrained_model, do_train=True, do_predict=True):
         self.model_type = model_type
-        self.pretrained_model = pretrained_model if resume_from_model is None else resume_from_model
+        self.pretrained_model = pretrained_model
         self.config_name = self.pretrained_model
         self.tokenizer_name = self.pretrained_model
         self.do_lower_case = True
         self.overwrite_model_dir = True
-        self.data_dir = Path(__file__).resolve().parent.parent.parent / 'test_data/biaffine_conll2003'
+        self.data_dir = (Path(__file__).resolve().parent.parent.parent / 'test_data/biaffine_conll2003_mini')\
+            .as_posix()
         self.data_has_offset_information = False
-        self.new_model_dir = new_model_dir if new_model_dir is not None else Path(
-            __file__).resolve().parent.parent.parent / f'new_ner_model/{model_type}_biaffine_ner_model'
-        self.predict_output_file = Path(
-            __file__).resolve().parent.parent.parent / f"new_ner_model/{model_type}_biaffine_ner_model/pred.json"
+        self.new_model_dir = (
+                Path(__file__).resolve().parent.parent.parent / f'new_ner_model/{model_type}_biaffine_ner_model')\
+            .as_posix()
+        self.predict_output_file = (
+                Path(__file__).resolve().parent.parent.parent / f"new_ner_model/{model_type}_biaffine_ner_model/pred.json")\
+            .as_posix()
         self.overwrite_output_dir = True
         self.max_seq_length = 512
         self.do_train = do_train
@@ -36,7 +38,7 @@ class Args:
         self.logger = TransformerNERLogger(
             logger_level="i",
             logger_file=Path(__file__).resolve().parent.parent.parent / "new_ner_model/log.txt").get_logger()
-        self.num_train_epochs = 1
+        self.num_train_epochs = 2
         self.gradient_accumulation_steps = 1
         self.do_warmup = True
         self.label2idx = None
@@ -58,7 +60,7 @@ class Args:
         self.use_crf = False
         self.focal_loss = False
         self.focal_loss_gamma = 2
-        self.resume_from_model = resume_from_model
+        self.resume_from_model = None
         self.use_biaffine = True
         self.mlp_dim = 128
         self.mlp_layers = 0
