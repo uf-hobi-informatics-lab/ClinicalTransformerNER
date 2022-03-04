@@ -40,6 +40,14 @@ BIOC_END = """
 """
 
 
+def biaffine2bio():
+    raise NotImplementedError("biaffine output to BIO format not implemented.")
+
+
+def biaffine2brat():
+    raise NotImplementedError("biaffine output to brat format not implemented.")
+
+
 def __prepare_path(text_dir, input_dir, output_dir):
     t_input = Path(text_dir)
     p_input = Path(input_dir)

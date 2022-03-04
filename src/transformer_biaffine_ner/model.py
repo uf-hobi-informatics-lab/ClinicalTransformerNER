@@ -106,8 +106,10 @@ class BiaffineLayer(nn.Module):
         # mlp_input_dim = config.hidden_size if config.include_only_bert_last_hidden else config.hidden_size*2
         mlp_input_dim = config.hidden_size
         mlp_output_dim = config.mlp_dim if config.mlp_dim > 0 else config.hidden_size
-        self.ffnns = MLP(mlp_input_dim, mlp_output_dim)  # ffnns: feed forward neural network start
-        self.ffnne = MLP(mlp_input_dim, mlp_output_dim)  # ffnne: feed forward neural network end
+        # ffnns: feed forward neural network start
+        self.ffnns = MLP(mlp_input_dim, mlp_output_dim, config.mlp_dim, config.mlp_layers)
+        # ffnne: feed forward neural network end
+        self.ffnne = MLP(mlp_input_dim, mlp_output_dim, config.mlp_dim, config.mlp_layers)
         self.biaffine = Biaffine(mlp_output_dim, config.num_labels)
         self.loss_fct = nn.CrossEntropyLoss()
 

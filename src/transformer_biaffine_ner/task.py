@@ -3,6 +3,8 @@
 # First created at 12/31/21
 
 from pathlib import Path
+
+from common_utils.common_io import json_dump
 from transformer_biaffine_ner.task_utils import train, predict, get_tokenizer, get_config
 from transformer_biaffine_ner.data_utils import TransformerNerBiaffineDataProcessor
 from transformer_ner.task import set_seed
@@ -45,6 +47,8 @@ def run_task(args):
         args.config.num_labels = args.num_classes
         args.config = get_config(args, is_train=True)
         args.config.vocab_size = len(args.tokenizer)
+        args.config.mlp_dim = args.mlp_dim
+        args.config.mlp_layers = args.mlp_layers
 
         # get train, dev data loader
         train_data_loader = data_processor.get_train_data_loader()
@@ -61,7 +65,13 @@ def run_task(args):
         test_data_loader = data_processor.get_test_data_loader()
 
         args.config = get_config(args, is_train=False)
-        predict_results = predict(args, test_data_loader)
+        # predict_results format: [{"tokens": [xx ...], "entities": [(en, en_type, s, e) ...]}]
+        predicted_results = predict(args, test_data_loader)
+
+        # we just output json formatted results
+        # we let users to do reformat using run_format_biaffine_output.py
+        output_fn = args.predict_output_file if args.predict_output_file else Path(args.new_model_dir) / "predicts.json"
+        json_dump(predicted_results, output_fn)
 
 
 def _get_unique_num_classes(label2idx):

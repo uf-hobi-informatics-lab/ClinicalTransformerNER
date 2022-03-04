@@ -3,7 +3,7 @@
 
 import argparse
 import warnings
-from traceback import format_exc
+import traceback
 
 import torch
 import transformers
@@ -106,6 +106,8 @@ def main():
     parser.add_argument("--mlp_dim", default=128, type=int,
                         help="The dimension for MLP layer in biaffine module, default to 128."
                              "If set this value <= 0, we use transformer model hidden layer dimension")
+    parser.add_argument("--mlp_layers", default=0, type=int,
+                        help="The number of layers in MLP in biaffine module, default to 0 (1 linear layer).")
     # adversarial training method: pgd, fgm
     parser.add_argument("--adversarial_training_method", default=None,
                         help="what method to use for adversarial training, support pgd and fgm; "
@@ -159,12 +161,12 @@ def main():
 
     try:
         if global_args.use_biaffine:
-            raise NotImplementedError("still under development")
             run_biaffine_task(global_args)
         else:
             run_task(global_args)
     except Exception as ex:
-        logger.error(format_exc())
+        traceback.print_exc()
+        logger.error(traceback.format_exc())
 
 
 if __name__ == '__main__':

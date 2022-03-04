@@ -85,7 +85,7 @@ def _get_eval_metrics(labels, preds):
     return precision, recall, f1
 
 
-def _evaluate(args, model, data_loader):
+def _evaluate(args, prev_best_score, model, new_model_dir, global_step, data_loader):
     args.logger.info("***** Running evaluation on {} number of dev data *****".format(len(data_loader)))
     args.logger.info("  Instantaneous batch size per GPU = {}".format(args.eval_batch_size))
     args.logger.info("******************************")
@@ -94,7 +94,17 @@ def _evaluate(args, model, data_loader):
 
     precision, recall, f1 = _get_eval_metrics(y_trues, y_preds)
 
-    return f1, precision, recall, loss
+    # save model if eval score is better (at least 1e-5 improvement)
+    new_best_score = prev_best_score
+    if f1 - prev_best_score > 5e-6:
+        args.logger.info('''
+        previous best score: {:.4f}; 
+        new best score: {:.4f}; 
+        '''.format(prev_best_score, f1))
+        new_best_score = f1
+        save_model(args, model, new_model_dir, global_step, latest=args.max_num_checkpoints)
+
+    return new_best_score, precision, recall, loss
 
 
 def predict(args, data_loader):
@@ -106,7 +116,24 @@ def predict(args, data_loader):
     model = load_model(args.new_model_dir)
     model.to(args.device)
 
-    _, y_preds, tok_ids, _ = _get_predictions(args, model, data_loader)
+    _, preds, tok_ids, _ = _get_predictions(args, model, data_loader)
+    assert len(preds) == len(tok_ids), \
+        f"pred: {len(preds)} sentences but tokens has {len(tok_ids)} sentences"
+
+    predicted_outputs = []
+    for pred, tok_id in zip(preds, tok_ids):
+        output = []
+        for each in pred:
+            en_type_id, s, e = each
+            en = args.tokenizer.decode(tok_id[s:e+1]).strip()
+            ll = len(en.split())
+            new_s = s
+            new_e = s + ll  # note we include extra pos here; we do not need to do [s: e+1] instead use [s:e] later
+            output.append((en, en_type_id, new_s, new_e))
+        sent_text = args.tokenizer.decode(tok_id).strip()
+        predicted_outputs.append({"tokens": sent_text.split(), "entities": output})
+
+    return predicted_outputs
 
 
 def train(args, train_data_loader, dev_data_loader):
@@ -149,7 +176,9 @@ def train(args, train_data_loader, dev_data_loader):
             # using training step
             if args.train_steps > 0 and (args.global_step + 1) % args.train_steps == 0 and args.epoch > 0:
                 # the current implementation will skip the all evaluations in the first epoch
-                best_score, pre, rec, eval_loss = _evaluate(args, model, dev_data_loader)
+                best_score, pre, rec, eval_loss = _evaluate(
+                    args, best_score, model, new_model_dir, global_step, dev_data_loader)
+
                 args.logger.info("""
                                 Global step: {}; 
                                 Epoch: {}; 
@@ -166,7 +195,9 @@ def train(args, train_data_loader, dev_data_loader):
                     args.best_score))
 
         if args.train_steps <= 0 or epoch == 0:
-            best_score, pre, rec, eval_loss = _evaluate(args, model, dev_data_loader)
+            best_score, pre, rec, eval_loss = _evaluate(
+                args, best_score, model, new_model_dir, global_step, dev_data_loader)
+
             args.logger.info("""
                             Global step: {}; 
                             Epoch: {}; 
