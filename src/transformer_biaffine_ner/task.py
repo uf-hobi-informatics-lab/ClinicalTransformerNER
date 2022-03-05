@@ -59,11 +59,19 @@ def run_task(args):
         args.config.mlp_layers = args.mlp_layers
         args.logger.info(f"load pretrained model from {args.pretrained_model}")
 
+        #############################################
+        # also influence TransformerBiaffineNerModel AutoModel load
         # we need to save pretrained_model to new_model_dir
         # in this way we can init transformer when we do prediction
+        # args.config.base_model_path = args.pretrained_model
+        # AutoModel.from_pretrained(args.config.base_model_path).save_pretrained(args.new_model_dir)
+        # args.config.base_model_path = args.new_model_dir
+        # # very bad design above
+        # use AutoModel.from_config to random init so we do not need to save original model for load model
+        # add flag in config to control behavior train - load from pretrained model; pred - init random
         args.config.base_model_path = args.pretrained_model
-        AutoModel.from_pretrained(args.config.base_model_path).save_pretrained(args.new_model_dir)
-        args.config.base_model_path = args.new_model_dir
+        args.config.init_in_training = True
+        #############################################
 
         # get train, dev data loader
         train_data_loader = data_processor.get_train_data_loader()
@@ -78,7 +86,9 @@ def run_task(args):
         test_data_loader = data_processor.get_test_data_loader()
 
         args.config = get_config(args, is_train=False)
+        args.config.init_in_training = False
         args.logger.info(f"configuration for prediction:\n{args.config}")
+
         # predict_results format: [{"tokens": [xx ...], "entities": [(en, en_type, s, e) ...]}]
         predicted_results = predict(args, test_data_loader)
 
