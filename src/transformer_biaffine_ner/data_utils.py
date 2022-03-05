@@ -362,7 +362,9 @@ class TransformerNerBiaffineDataProcessor(object):
             self.logger.info(f"load {task} data from {fn}")
             dataset = pkl_load(fn)
         else:
-            dataset = self.data2feature(data, task)
+            # dataset = self.data2feature(data, task)
+            # use parallel with 8 cores
+            dataset = self.data2feature_parallel(data, task)
         if self.cache and not fn.exists():
             self.logger.info(f"set cache to True so it will save {task} data at {fn}")
             pkl_dump(dataset, fn)

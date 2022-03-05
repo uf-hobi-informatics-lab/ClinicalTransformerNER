@@ -175,8 +175,8 @@ def train(args, train_data_loader, dev_data_loader):
             _train_step(args, model, batch, step)
             global_step += 1
 
-            # using training step and args.epoch > 0
-            if args.train_steps > 0 and (global_step + 1) % args.train_steps == 0:
+            # using training step
+            if args.train_steps > 0 and (global_step + 1) % args.train_steps == 0 and args.epoch > 0:
                 # the current implementation will skip the all evaluations in the first epoch
                 best_score, pre, rec, eval_loss = _evaluate(
                     args, best_score, model, new_model_dir, global_step, dev_data_loader)
