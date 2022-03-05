@@ -13,7 +13,6 @@ from torch.nn.utils import clip_grad_norm_
 
 from common_utils.common_io import json_dump, write_to_file
 from transformer_ner.model_utils import PGD, FGM, get_linear_schedule_with_warmup
-from transformer_ner.task import save_model
 from transformer_biaffine_ner.model import TransformerBiaffineNerModel
 from transformer_biaffine_ner.data_utils import batch_to_model_inputs
 from transformers import AutoTokenizer, AutoConfig, get_constant_schedule_with_warmup
@@ -108,8 +107,24 @@ def _evaluate(args, prev_best_score, model, new_model_dir, global_step, data_loa
     return new_best_score, precision, recall, loss
 
 
+def _get_decode_mapping(tok_ids, cur_index, query_word, tokenizer=None):
+    j = cur_index + 1
+    while j <= len(tok_ids):
+        en = tokenizer.decode(tok_ids[cur_index: j]).strip()
+        if en == query_word:
+            return j
+        j += 1
+
+
+def _decode_index_mapping(map_table, s, e):
+    # note: we removed the special token when we create mapping table
+    new_s = map_table[s][0]
+    new_e = map_table[e][1]
+    return new_s, new_e
+
+
 def predict(args, data_loader):
-    args.logger.info("***** Running evaluation on {} number of dev data *****".format(len(data_loader)))
+    args.logger.info("***** Running evaluation on {} number of test data *****".format(len(data_loader)))
     args.logger.info("  Instantaneous batch size per GPU = {}".format(args.eval_batch_size))
     args.logger.info("******************************")
 
@@ -124,15 +139,25 @@ def predict(args, data_loader):
     predicted_outputs = []
     for pred, tok_id in zip(preds, tok_ids):
         output = []
+        sent_text = args.tokenizer.decode(tok_id, skip_special_tokens=True).strip()
+
+        # build a token remap to map tok ids positions to token positions after decode
+        indexes_remap = dict()
+        cur_index = 0
+        for i, word in enumerate(sent_text):
+            new_index = _get_decode_mapping(tok_ids, cur_index, query_word=word, tokenizer=args.tokenizer)
+            indexes_remap[i] = (cur_index, new_index)
+            cur_index = new_index
+
         for each in pred:
             en_type_id, s, e = each
-            # TODO: decode remap index is wrong here
             en = args.tokenizer.decode(tok_id[s: e+1]).strip()
-            ll = len(en.split())
-            new_s = s
-            new_e = s + ll  # note we include extra pos here; we do not need to do [s: e+1] instead use [s:e] later
-            output.append((en, en_type_id, new_s, new_e))
-        sent_text = args.tokenizer.decode(tok_id).strip()
+            new_s, new_e = _decode_index_mapping(indexes_remap, s, e)
+            # check if decode is right
+            en_check = " ".join(sent_text[new_s: new_e])
+            assert en == en_check, f"decode error: expect: {en} but get {en_check}\n{sent_text}\n{each}"
+            en_type = args.config.idx2label[int(en_type_id)]
+            output.append((en, en_type, new_s, new_e))
         predicted_outputs.append({"tokens": sent_text.split(), "entities": output})
 
     return predicted_outputs
@@ -345,6 +370,24 @@ def get_config(args, is_train=True):
     return config
 
 
+def save_model(args, model, model_dir, index, latest=3):
+    new_model_file = model_dir / "checkpoint_{}.bin".format(index)
+    args.tokenizer.save_pretrained(args.new_model_dir)
+    args.config.save_pretrained(args.new_model_dir)
+
+    # save model as state dict
+    args.logger.info("save checkpoint to {}".format(new_model_file))
+    torch.save(model.state_dict(), new_model_file)
+
+    # only keep 'latest' # of checkpoints
+    all_model_files = list(model_dir.glob("checkpoint_*.bin"))
+    if len(all_model_files) > latest:
+        # sorted_files = sorted(all_model_files, key=lambda x: os.path.getmtime(x))  # sorted by the last modified time
+        sorted_file = sorted(all_model_files, key=lambda x: int(x.stem.split("_")[-1]))  # sorted by the checkpoint step
+        file_to_remove = sorted_file[0]  # remove earliest checkpoints
+        file_to_remove.unlink()
+
+
 def load_model(args):
     model_dir = Path(args.new_model_dir)
 
@@ -356,16 +399,10 @@ def load_model(args):
     args.logger.info("load checkpoint from {}".format(sorted_file[-1]))
     ckpt = torch.load(sorted_file[-1], map_location=torch.device('cpu'))
 
-    # #load model as state_dict
     try:
         model = TransformerBiaffineNerModel
         model = model(config=args.config)
         model.load_state_dict(state_dict=ckpt)
     except AttributeError as Ex:
         args.logger.error(traceback.format_exc())
-        args.logger.warning(
-            """The model seems save using model.save instead of model.state_dict,
-            attempt to directly using the loaded checkpoint as model.
-            May raise error. If raise error, you need to check the model load whether is correct or not""")
-        model = ckpt
-    return model
+        raise RuntimeError("""You need to check the model save/load processes.""")

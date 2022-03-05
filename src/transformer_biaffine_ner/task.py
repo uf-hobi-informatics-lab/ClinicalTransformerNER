@@ -53,14 +53,15 @@ def run_task(args):
         args.config = get_config(args, is_train=True)
         args.config.num_labels = args.num_classes
         args.config.label2idx = args.label2idx
+        args.config.idx2label = args.idx2label
         args.config.vocab_size = len(args.tokenizer)
         args.config.mlp_dim = args.mlp_dim
         args.config.mlp_layers = args.mlp_layers
         args.logger.info(f"load pretrained model from {args.pretrained_model}")
-        args.config.base_model_path = args.pretrained_model
 
         # we need to save pretrained_model to new_model_dir
         # in this way we can init transformer when we do prediction
+        args.config.base_model_path = args.pretrained_model
         AutoModel.from_pretrained(args.config.base_model_path).save_pretrained(args.new_model_dir)
         args.config.base_model_path = args.new_model_dir
 
@@ -77,10 +78,10 @@ def run_task(args):
         test_data_loader = data_processor.get_test_data_loader()
 
         args.config = get_config(args, is_train=False)
+        args.logger.info(f"configuration for prediction:\n{args.config}")
         # predict_results format: [{"tokens": [xx ...], "entities": [(en, en_type, s, e) ...]}]
         predicted_results = predict(args, test_data_loader)
 
-        print(predicted_results)
         # we just output json formatted results
         # we let users to do reformat using run_format_biaffine_output.py
         output_fn = args.predict_output_file if args.predict_output_file else Path(args.new_model_dir) / "predicts.json"

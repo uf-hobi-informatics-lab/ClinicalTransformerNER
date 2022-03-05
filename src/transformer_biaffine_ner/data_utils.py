@@ -4,6 +4,7 @@
 
 from pathlib import Path
 import numpy as np
+from functools import partial
 from transformers import BertTokenizer
 import warnings
 import tqdm
@@ -251,9 +252,9 @@ class TransformerNerBiaffineDataProcessor(object):
             labels[s, e] = label_id
 
         # masks dim = max_seq_len * max_seq_len
-        masks = [attention_masks for i in range(sum(attention_masks))]
+        masks = [attention_masks for _ in range(sum(attention_masks))]
         line_zeros = [0] * self.max_seq_len
-        masks.extend([line_zeros for i in range(len(masks), self.max_seq_len)])
+        masks.extend([line_zeros for _ in range(len(masks), self.max_seq_len)])
         # # call flattern, so we do not need to call masks.view(-1) in training
         # # will slow down features2tensors so we just keep original dim
         # masks = np.array(masks).flatten()
@@ -261,51 +262,13 @@ class TransformerNerBiaffineDataProcessor(object):
 
         return labels, masks
 
-    def _helper_data2feature_parallel(self, examples):
-        temp = []
-
-        for example in tqdm.tqdm(examples, desc="examples2features"):
-            tok_remap = dict()
-            tokens = example["tokens"]
-            entities = example["entities"]
-            new_tokens = []
-            for idx, tok in enumerate(tokens):
-                new_toks = self.tokenizer.tokenize(tok)
-                tok_remap[idx] = (len(new_tokens), len(new_tokens) + len(new_toks) - 1)
-                new_tokens.extend(new_toks)
-
-            if len(new_tokens) > (self.max_seq_len - 4):
-                warnings.warn(
-                    f"example: {example}\nthe tokens are too many and will cause truncate which leads to error\n \
-                    check preprocessing to make the sentences shorter.")
-
-            new_token_ids, attention_masks, token_type_ids = self._tokens2ids(new_tokens)
-            # TODO: in test, do we need to create labels and masks? quite MEM intensive
-            # TODO: consider generating labels/masks using data collate_fn on fly
-            # create 2D labels and masks based on token remapping and attention_masks
-            new_entities = self._update_labels(entities, tok_remap)
-            # print([e for e in new_tokens if e != "[PAD]"])
-            # print(entities, new_entities)
-            labels, masks = self._create_labels_and_masks(new_entities, attention_masks)
-
-            feature = InputFeature(input_tokens=" ".join(new_tokens),
-                                   input_ids=new_token_ids,
-                                   attention_masks=attention_masks,
-                                   token_type_ids=token_type_ids,
-                                   labels=labels,
-                                   masks=masks
-                                   )
-            temp.append(feature)
-
-        return temp
-
     def data2feature_parallel(self, examples, task="test"):
         from concurrent.futures import ProcessPoolExecutor
         features = []
         batch_examples = np.array_split(examples, 8)
         with ProcessPoolExecutor(max_workers=8) as pool:
-            for each in pool.map(self._helper_data2feature_parallel, batch_examples):
-                features.extend(each)
+            for batch_features in pool.map(partial(self.data2feature, task=task), batch_examples):
+                features.extend(batch_features)
 
         return features
 
@@ -327,12 +290,10 @@ class TransformerNerBiaffineDataProcessor(object):
                     check preprocessing to make the sentences shorter.")
 
             new_token_ids, attention_masks, token_type_ids = self._tokens2ids(new_tokens)
-            # TODO: in test, do we need to create labels and masks? quite MEM intensive
+            # Do we need to create labels and masks here? quite MEM intense; also take too much space to save cache
             # TODO: consider generating labels/masks using data collate_fn on fly
             # create 2D labels and masks based on token remapping and attention_masks
             new_entities = self._update_labels(entities, tok_remap)
-            # print([e for e in new_tokens if e != "[PAD]"])
-            # print(entities, new_entities)
             labels, masks = self._create_labels_and_masks(new_entities, attention_masks)
 
             feature = InputFeature(input_tokens=" ".join(new_tokens),
@@ -363,7 +324,7 @@ class TransformerNerBiaffineDataProcessor(object):
             dataset = pkl_load(fn)
         else:
             # dataset = self.data2feature(data, task)
-            # use parallel with 8 cores
+            # #use parallel with 8 cores
             dataset = self.data2feature_parallel(data, task)
         if self.cache and not fn.exists():
             self.logger.info(f"set cache to True so it will save {task} data at {fn}")

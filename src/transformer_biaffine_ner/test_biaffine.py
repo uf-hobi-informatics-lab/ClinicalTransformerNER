@@ -16,7 +16,7 @@ class Args:
         self.tokenizer_name = self.pretrained_model
         self.do_lower_case = True
         self.overwrite_model_dir = True
-        self.data_dir = (Path(__file__).resolve().parent.parent.parent / 'test_data/biaffine_conll2003')\
+        self.data_dir = (Path(__file__).resolve().parent.parent.parent / 'test/data/n2c2')\
             .as_posix()
         self.data_has_offset_information = False
         self.new_model_dir = (
