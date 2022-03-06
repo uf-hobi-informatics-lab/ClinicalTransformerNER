@@ -38,11 +38,18 @@ class Biaffine(nn.Module):
         super().__init__()
         self.bx = bias_x
         self.by = bias_y
+
         # biaffine metrics
         self.U = nn.Parameter(
             torch.Tensor(input_dim + int(bias_x), output_dim, input_dim + int(bias_y)))
+
+        # W
+        wdim = input_dim + int(bias_x) + input_dim + int(bias_y) + 1  # 1 is for bias
+        self.W = torch.nn.Parameter(torch.Tensor(wdim, output_dim))
+
         # use _normal init; we can test other init method: xavier, kaiming, ones
         nn.init.normal_(self.U)
+        nn.init.normal_(self.W)
 
     def forward(self, x, y):
         # add bias
@@ -58,11 +65,27 @@ class Biaffine(nn.Module):
 
         m = t1*U => [b,s,o,v] => [b, s*o, v]
         m*t2.T => [b, s*o, v] * [b, v, s] => [b, s, o, s] => [b, s, s, o]: this is the mapping table
+        
+        from https://aclanthology.org/2020.acl-main.577.pdf
+        hs(i) = FFNNs(xsi)
+        he(i) = FFNNe(xei)
+        we implement following
+        rm(i) = hs(i)T*U*he(i) + Wm(hs(i)⊕he(i)) + bm
         """
-        # einsum known to be slow in some cases
-        biaffine_mappings = torch.einsum('bxi,ioj,byj->bxyo', x, self.U, y)
 
-        return biaffine_mappings
+        # hs(i)*U*he(i)T
+        biaffine_head_tail = torch.einsum('bxi,ioj,byj->bxyo', x, self.U, y)
+
+        # Wm(hs(i)⊕he(i)) + bm
+        xp = torch.unsqueeze(x, dim=2)
+        xp = torch.tile(xp, (1, 1, y.shape[-2], 1))
+        yp = torch.unsqueeze(y, dim=1)
+        yp = torch.tile(yp, (1, x.shape[-2], 1, 1))
+        xp_yp = torch.concat((xp, yp), dim=-1)
+        xp_yp = torch.cat([xp_yp, torch.ones_like(xp_yp[..., :1])], dim=-1)
+        biaffine_tail = torch.einsum("bxym,mo->bxyo", xp_yp, self.W)
+
+        return biaffine_head_tail + biaffine_tail
 
 
 # class Biaffine(nn.Module):
