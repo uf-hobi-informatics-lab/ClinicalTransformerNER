@@ -16,6 +16,7 @@ from transformer_ner.model_utils import PGD, FGM, get_linear_schedule_with_warmu
 from transformer_biaffine_ner.model import TransformerBiaffineNerModel
 from transformer_biaffine_ner.data_utils import batch_to_model_inputs
 from transformers import AutoTokenizer, AutoConfig, get_constant_schedule_with_warmup
+from transformer_ner.task import MODEL_CLASSES
 
 
 def _get_label_from_span(span_in_batch):
@@ -63,7 +64,7 @@ def _get_predictions(args, model, data_loader):
             y_preds.extend(y_pred)
             tok_ids.extend(token_ids)
 
-    return y_trues, y_preds, tok_ids, round(eval_loss/total_samples, 4)
+    return y_trues, y_preds, tok_ids, round(eval_loss / total_samples, 4)
 
 
 def _get_eval_metrics(labels, preds):
@@ -111,7 +112,7 @@ def _get_decode_mapping(tok_ids, cur_index, query_word, tokenizer=None):
     while cur_index < len(tok_ids):
         j = cur_index + 1
         while j <= len(tok_ids):
-            en = tokenizer.decode(tok_ids[cur_index: j]).strip()
+            en = tokenizer.decode(tok_ids[cur_index: j], clean_up_tokenization_spaces=False).strip()
             if en == query_word:
                 return cur_index, j
             j += 1
@@ -123,9 +124,17 @@ def _get_decode_mapping(tok_ids, cur_index, query_word, tokenizer=None):
 
 def _decode_index_mapping(map_table, s, e):
     # note: we removed the special token when we create mapping table
-
-    new_s = map_table[s][0]
-    new_e = map_table[e][1]
+    # new_s = map_table[s]
+    # new_e = map_table[e]
+    # return new_s, new_e
+    new_s = None
+    new_e = None
+    for k, v in map_table.items():
+        range_s, range_e = v
+        if range_s <= s <= range_e:
+            new_s = k
+        if range_s <= e <= range_e:
+            new_e = k
     return new_s, new_e
 
 
@@ -142,10 +151,13 @@ def predict(args, data_loader):
     assert len(preds) == len(tok_ids), \
         f"pred: {len(preds)} sentences but tokens has {len(tok_ids)} sentences"
 
+    print("decoding ...")
+
     predicted_outputs = []
     for pred, tok_id in zip(preds, tok_ids):
         output = []
-        sent_text = args.tokenizer.decode(tok_id, skip_special_tokens=True).strip().split(" ")
+        sent_text = args.tokenizer.decode(
+            tok_id, skip_special_tokens=True, clean_up_tokenization_spaces=False).strip().split(" ")
 
         # build a token remap to map tok ids positions to token positions after decode
         indexes_remap = dict()
@@ -156,22 +168,30 @@ def predict(args, data_loader):
             indexes_remap[i] = (cur_index, new_index)
             cur_index = new_index
 
-        s_map = dict()
-        e_map = dict()
-        for k, v in indexes_remap.items():
-            s_map[v[0]] = k
-            e_map[v[1]] = k
+        # s_map = dict()
+        # for k, v in indexes_remap.items():
+        #     s_map[v] = k
 
         for each in pred:
             en_type_id, s, e = each
-            en = args.tokenizer.decode(tok_id[s: e+1]).strip()
+            en = args.tokenizer.decode(tok_id[s: e + 1], clean_up_tokenization_spaces=False).strip()
             new_s, new_e = _decode_index_mapping(indexes_remap, s, e)
+            new_e += 1
             # check if decode is right
             en_check = " ".join(sent_text[new_s: new_e])
-            assert en == en_check, f"decode error: expect: {en} but get {en_check}\n{sent_text}\n{each}"
-            en_type = args.config.idx2label[int(en_type_id)]
+            if en != en_check:
+                args.logger.warning(f"decode error: expect: {en} but get "
+                                    f"{en_check}\n"
+                                    f"{[e for e in tok_id if e != args.tokenizer.pad_token_id]}\n"
+                                    f"{sent_text}\n{each}")
+
+            try:
+                en_type = args.config.idx2label[int(en_type_id)]
+            except KeyError as ex:
+                en_type = args.config.idx2label[str(int(en_type_id))]
+
             output.append((en, en_type, new_s, new_e))
-        predicted_outputs.append({"tokens": sent_text.split(), "entities": output})
+        predicted_outputs.append({"tokens": sent_text, "entities": output})
 
     return predicted_outputs
 
@@ -219,43 +239,13 @@ def train(args, train_data_loader, dev_data_loader):
                 best_score, f1, pre, rec, eval_loss = _evaluate(
                     args, best_score, model, new_model_dir, global_step, dev_data_loader)
 
-                args.logger.info("""
-                                Global step: {}; 
-                                Epoch: {}; 
-                                average_train_loss: {:.4f}; 
-                                eval_loss: {:.4f};
-                                precision: {:.4f};
-                                recall: {:.4f};
-                                f1: {:.4f};
-                                current best F1 score: {:.4f}""".format(
-                    global_step, epoch + 1,
-                    round(args.tr_loss / global_step, 4),
-                    eval_loss,
-                    pre,
-                    rec,
-                    f1,
-                    best_score))
+                args.logger.info(_eval_info(args, global_step, epoch, eval_loss, pre, rec, f1, best_score))
 
         if args.train_steps <= 0 or epoch == 0:
             best_score, f1, pre, rec, eval_loss = _evaluate(
                 args, best_score, model, new_model_dir, global_step, dev_data_loader)
 
-            args.logger.info("""
-                            Global step: {}; 
-                            Epoch: {}; 
-                            average_train_loss: {:.4f}; 
-                            eval_loss: {:.4f};
-                            precision: {:.4f};
-                            recall: {:.4f};
-                            f1: {:.4f};
-                            current best F1 score: {:.4f}""".format(
-                global_step, epoch + 1,
-                round(args.tr_loss / global_step, 4),
-                eval_loss,
-                pre,
-                rec,
-                f1,
-                best_score))
+            args.logger.info(_eval_info(args, global_step, epoch, eval_loss, pre, rec, f1, best_score))
 
         # early stop check
         if best_score - epcoh_best_score > 1e-5:
@@ -361,18 +351,48 @@ def _print_info(args, data_loader, total_steps):
     args.logger.info("******************************")
 
 
+def _eval_info(args, global_step, epoch, eval_loss, pre, rec, f1, best_score):
+    info = """
+        Global step: {}; 
+        Epoch: {}; 
+        average_train_loss: {:.4f}; 
+        eval_loss: {:.4f};
+        precision: {:.4f};
+        recall: {:.4f};
+        f1: {:.4f};
+        current best F1 score: {:.4f}""".format(
+        global_step, epoch + 1,
+        round(args.tr_loss / global_step, 4),
+        eval_loss,
+        pre,
+        rec,
+        f1,
+        best_score)
+    return info
+
+
 def get_tokenizer(args, is_train=True):
     if is_train:
         tokenizer_path = args.tokenizer_name
     else:
         tokenizer_path = args.new_model_dir
 
+    # # AutoTokenizer has a problem with BERT case, we will use MODEL_CLASSES for now until issue fixed
+    # if args.model_type in {"roberta", "bart", "longformer", "deberta"}:
+    #     # we need to set add_prefix_space to True for roberta, longformer, and Bart (any tokenizer from BPE)
+    #     tokenizer = AutoTokenizer.from_pretrained(
+    #         tokenizer_path, do_lower_case=args.do_lower_case, add_prefix_space=True)
+    # else:
+    #     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, do_lower_case=args.do_lower_case)
+
+    # # alternative to get tokenizer
+    _, _, tokenizer_init = MODEL_CLASSES[args.model_type]
     if args.model_type in {"roberta", "bart", "longformer", "deberta"}:
         # we need to set add_prefix_space to True for roberta, longformer, and Bart (any tokenizer from BPE)
-        tokenizer = AutoTokenizer.from_pretrained(
+        tokenizer = tokenizer_init.from_pretrained(
             tokenizer_path, do_lower_case=args.do_lower_case, add_prefix_space=True)
     else:
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, do_lower_case=args.do_lower_case)
+        tokenizer = tokenizer_init.from_pretrained(tokenizer_path, do_lower_case=args.do_lower_case)
 
     return tokenizer
 
