@@ -45,7 +45,7 @@ class Biaffine(nn.Module):
 
         # W
         wdim = input_dim + int(bias_x) + input_dim + int(bias_y) + 1  # 1 is for bias
-        self.W = torch.nn.Parameter(torch.Tensor(wdim, output_dim))
+        self.W = nn.Parameter(torch.Tensor(wdim, output_dim))
 
         # use _normal init; we can test other init method: xavier, kaiming, ones
         nn.init.normal_(self.U)
