@@ -38,7 +38,9 @@ def run_task(args):
     data_processor.set_logger(args.logger)
     data_processor.set_max_seq_len(args.max_seq_length)
     data_processor.set_tokenizer_type(args.model_type)
-    # we default to cache all the preprocessed data/ you need to manually delete them from data directory
+    # default to no cache, since it will take many disk space
+    # we use parallel to do preprocessing which is fast enough to avoid caching
+    # in future we need a flag to control this
     data_processor.set_cache(True)
 
     if args.do_train:

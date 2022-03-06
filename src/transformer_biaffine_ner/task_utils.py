@@ -104,20 +104,26 @@ def _evaluate(args, prev_best_score, model, new_model_dir, global_step, data_loa
         new_best_score = f1
         save_model(args, model, new_model_dir, global_step, latest=args.max_num_checkpoints)
 
-    return new_best_score, precision, recall, loss
+    return new_best_score, f1, precision, recall, loss
 
 
 def _get_decode_mapping(tok_ids, cur_index, query_word, tokenizer=None):
-    j = cur_index + 1
-    while j <= len(tok_ids):
-        en = tokenizer.decode(tok_ids[cur_index: j]).strip()
-        if en == query_word:
-            return j
-        j += 1
+    while cur_index < len(tok_ids):
+        j = cur_index + 1
+        while j <= len(tok_ids):
+            en = tokenizer.decode(tok_ids[cur_index: j]).strip()
+            if en == query_word:
+                return cur_index, j
+            j += 1
+        cur_index += 1
+
+    raise RuntimeError(f"Cannot map indexes for {query_word} in"
+                       f"\n{tokenizer.decode(tok_ids, skip_special_tokens=True).strip().split()}")
 
 
 def _decode_index_mapping(map_table, s, e):
     # note: we removed the special token when we create mapping table
+
     new_s = map_table[s][0]
     new_e = map_table[e][1]
     return new_s, new_e
@@ -139,15 +145,22 @@ def predict(args, data_loader):
     predicted_outputs = []
     for pred, tok_id in zip(preds, tok_ids):
         output = []
-        sent_text = args.tokenizer.decode(tok_id, skip_special_tokens=True).strip()
+        sent_text = args.tokenizer.decode(tok_id, skip_special_tokens=True).strip().split(" ")
 
         # build a token remap to map tok ids positions to token positions after decode
         indexes_remap = dict()
         cur_index = 0
         for i, word in enumerate(sent_text):
-            new_index = _get_decode_mapping(tok_ids, cur_index, query_word=word, tokenizer=args.tokenizer)
+            word = word.strip()
+            cur_index, new_index = _get_decode_mapping(tok_id, cur_index, query_word=word, tokenizer=args.tokenizer)
             indexes_remap[i] = (cur_index, new_index)
             cur_index = new_index
+
+        s_map = dict()
+        e_map = dict()
+        for k, v in indexes_remap.items():
+            s_map[v[0]] = k
+            e_map[v[1]] = k
 
         for each in pred:
             en_type_id, s, e = each
@@ -203,7 +216,7 @@ def train(args, train_data_loader, dev_data_loader):
             # using training step
             if args.train_steps > 0 and (global_step + 1) % args.train_steps == 0 and args.epoch > 0:
                 # the current implementation will skip the all evaluations in the first epoch
-                best_score, pre, rec, eval_loss = _evaluate(
+                best_score, f1, pre, rec, eval_loss = _evaluate(
                     args, best_score, model, new_model_dir, global_step, dev_data_loader)
 
                 args.logger.info("""
@@ -213,16 +226,18 @@ def train(args, train_data_loader, dev_data_loader):
                                 eval_loss: {:.4f};
                                 precision: {:.4f};
                                 recall: {:.4f};
+                                f1: {:.4f};
                                 current best F1 score: {:.4f}""".format(
                     global_step, epoch + 1,
                     round(args.tr_loss / global_step, 4),
                     eval_loss,
                     pre,
                     rec,
+                    f1,
                     best_score))
 
         if args.train_steps <= 0 or epoch == 0:
-            best_score, pre, rec, eval_loss = _evaluate(
+            best_score, f1, pre, rec, eval_loss = _evaluate(
                 args, best_score, model, new_model_dir, global_step, dev_data_loader)
 
             args.logger.info("""
@@ -232,12 +247,14 @@ def train(args, train_data_loader, dev_data_loader):
                             eval_loss: {:.4f};
                             precision: {:.4f};
                             recall: {:.4f};
+                            f1: {:.4f};
                             current best F1 score: {:.4f}""".format(
                 global_step, epoch + 1,
                 round(args.tr_loss / global_step, 4),
                 eval_loss,
                 pre,
                 rec,
+                f1,
                 best_score))
 
         # early stop check
@@ -403,6 +420,7 @@ def load_model(args):
         model = TransformerBiaffineNerModel
         model = model(config=args.config)
         model.load_state_dict(state_dict=ckpt)
+        return model
     except AttributeError as Ex:
         args.logger.error(traceback.format_exc())
         raise RuntimeError("""You need to check the model save/load processes.""")
