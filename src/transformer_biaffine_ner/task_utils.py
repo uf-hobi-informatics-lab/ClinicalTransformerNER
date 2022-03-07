@@ -123,10 +123,6 @@ def _get_decode_mapping(tok_ids, cur_index, query_word, tokenizer=None):
 
 
 def _decode_index_mapping(map_table, s, e):
-    # note: we removed the special token when we create mapping table
-    # new_s = map_table[s]
-    # new_e = map_table[e]
-    # return new_s, new_e
     new_s = None
     new_e = None
     for k, v in map_table.items():
@@ -152,8 +148,8 @@ def predict(args, data_loader):
         f"pred: {len(preds)} sentences but tokens has {len(tok_ids)} sentences"
 
     predicted_outputs = []
-    # TODO: parallel this part; decoding is slow for now
-    for pred, tok_id in tqdm((preds, tok_ids), desc="prediction decoding..."):
+    # TODO: parallel this part
+    for pred, tok_id in tqdm(zip(preds, tok_ids), total=len(tok_ids), desc="prediction decoding..."):
         output = []
         sent_text = args.tokenizer.decode(
             tok_id, skip_special_tokens=True, clean_up_tokenization_spaces=False).strip().split(" ")
@@ -166,10 +162,6 @@ def predict(args, data_loader):
             cur_index, new_index = _get_decode_mapping(tok_id, cur_index, query_word=word, tokenizer=args.tokenizer)
             indexes_remap[i] = (cur_index, new_index)
             cur_index = new_index
-
-        # s_map = dict()
-        # for k, v in indexes_remap.items():
-        #     s_map[v] = k
 
         for each in pred:
             en_type_id, s, e = each
@@ -184,11 +176,7 @@ def predict(args, data_loader):
                                     f"{[e for e in tok_id if e != args.tokenizer.pad_token_id]}\n"
                                     f"{sent_text}\n{each}")
 
-            # TODO: make sure idx2label is created and saved in config in one format
-            try:
-                en_type = args.config.idx2label[int(en_type_id)]
-            except KeyError as ex:
-                en_type = args.config.idx2label[str(int(en_type_id))]
+            en_type = args.config.idx2label[int(en_type_id)]
 
             output.append((en, en_type, new_s, new_e))
         predicted_outputs.append({"tokens": sent_text, "entities": output})

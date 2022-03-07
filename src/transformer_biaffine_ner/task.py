@@ -95,6 +95,7 @@ def run_task(args):
 
         args.config = get_config(args, is_train=False)
         args.config.init_in_training = False
+        args.config.idx2label = {v: k for k, v in args.config.label2idx.items()}
         args.logger.info(f"configuration for prediction:\n{args.config}")
 
         # predict_results format: [{"tokens": [xx ...], "entities": [(en, en_type, s, e) ...]}]
