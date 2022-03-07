@@ -151,10 +151,9 @@ def predict(args, data_loader):
     assert len(preds) == len(tok_ids), \
         f"pred: {len(preds)} sentences but tokens has {len(tok_ids)} sentences"
 
-    print("decoding ...")
-
     predicted_outputs = []
-    for pred, tok_id in zip(preds, tok_ids):
+    # TODO: parallel this part; decoding is slow for now
+    for pred, tok_id in tqdm((preds, tok_ids), desc="prediction decoding..."):
         output = []
         sent_text = args.tokenizer.decode(
             tok_id, skip_special_tokens=True, clean_up_tokenization_spaces=False).strip().split(" ")
@@ -185,6 +184,7 @@ def predict(args, data_loader):
                                     f"{[e for e in tok_id if e != args.tokenizer.pad_token_id]}\n"
                                     f"{sent_text}\n{each}")
 
+            # TODO: make sure idx2label is created and saved in config in one format
             try:
                 en_type = args.config.idx2label[int(en_type_id)]
             except KeyError as ex:

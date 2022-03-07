@@ -3,6 +3,7 @@
 # First created at 12/31/21
 
 from pathlib import Path
+import gc
 
 from common_utils.common_io import json_dump, json_load
 from transformer_biaffine_ner.task_utils import train, predict, get_tokenizer, get_config
@@ -41,7 +42,7 @@ def run_task(args):
     # default to no cache, since it will take many disk space
     # we use parallel to do preprocessing which is fast enough to avoid caching
     # in future we need a flag to control this
-    data_processor.set_cache(True)
+    data_processor.set_cache(False)
 
     if args.do_train:
         # create tokenizer and add it to data processor
@@ -80,6 +81,11 @@ def run_task(args):
         dev_data_loader = data_processor.get_dev_data_loader()
 
         train(args, train_data_loader, dev_data_loader)
+
+        # if do_train and do_predict, we try to release some RAM here
+        # del train_data_loader
+        # del dev_data_loader
+        gc.collect()
 
     if args.do_predict:
         args.tokenizer = get_tokenizer(args, is_train=False)
