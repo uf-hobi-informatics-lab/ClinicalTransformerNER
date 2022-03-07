@@ -20,14 +20,17 @@ import numpy as np
 import torch
 from torch.nn import CrossEntropyLoss
 from torch.nn import functional as F
+from torch.optim import AdamW
 from tqdm import tqdm, trange
-from transformers import (AdamW, AlbertConfig, AlbertTokenizer, BartConfig,
+from transformers import (AlbertConfig, AlbertTokenizer, BartConfig,
                           BartTokenizer, BertConfig, BertTokenizer,
                           DebertaConfig, DebertaTokenizer, DistilBertConfig,
                           DistilBertTokenizer, ElectraConfig, ElectraTokenizer,
                           LongformerConfig, LongformerTokenizer, RobertaConfig,
                           RobertaTokenizer, XLNetConfig, XLNetTokenizer,
-                          get_linear_schedule_with_warmup)
+                          DebertaV2Tokenizer, DebertaV2Config,
+                          MegatronBertConfig)
+# from transformers import get_linear_schedule_with_warmup
 
 from common_utils.bio_prf_eval import BioEval
 from common_utils.common_io import json_dump, json_load, output_bio
@@ -38,11 +41,13 @@ from transformer_ner.data_utils import (NEXT_GUARD, NEXT_TOKEN,
                                         ner_data_loader,
                                         transformer_convert_data_to_features)
 from transformer_ner.model import (AlbertNerModel, BartNerModel,
-                                   BertLikeNerModel, BertNerModel,
+                                   BertNerModel, XLNetNerModel,
                                    DeBertaNerModel, DistilBertNerModel,
                                    ElectraNerModel, LongformerNerModel,
                                    RobertaNerModel, Transformer_CRF,
-                                   XLNetNerModel)
+                                   DeBertaV2NerModel, MegatronNerModel)
+from transformer_ner.model_utils import PGD, FGM, get_linear_schedule_with_warmup
+
 
 MODEL_CLASSES = {
     'bert': (BertConfig, BertNerModel, BertTokenizer),
@@ -53,7 +58,15 @@ MODEL_CLASSES = {
     'bart': (BartConfig, BartNerModel, BartTokenizer),
     'electra': (ElectraConfig, ElectraNerModel, ElectraTokenizer),
     'longformer': (LongformerConfig, LongformerNerModel, LongformerTokenizer),
-    'deberta': (DebertaConfig, DeBertaNerModel, DebertaTokenizer)
+    'deberta': (DebertaConfig, DeBertaNerModel, DebertaTokenizer),
+    'deberta-v2': (DebertaV2Config, DeBertaV2NerModel, DebertaV2Tokenizer),
+    'megatron': (MegatronBertConfig, MegatronNerModel, BertTokenizer)
+}
+
+
+ADVERSARIAL_TRAINER = {
+    "pgd": PGD,
+    "fgm": FGM
 }
 
 
@@ -77,7 +90,8 @@ def load_model(args, new_model_dir=None):
         args.logger.error(traceback.format_exc())
         args.logger.warning(
             """The model seems save using model.save instead of model.state_dict,
-            attempt to directly using the loaded checkpoint as model.""")
+            attempt to directly using the loaded checkpoint as model.
+            May raise error. If raise error, you need to check the model load whether is correct or not""")
         model = ckpt
     return model
 
@@ -85,6 +99,8 @@ def load_model(args, new_model_dir=None):
 def save_only_transformer_core(args, model):
     model_type = args.model_type
     if model_type == "bert":
+        model_core = model.bert
+    if model_type == "megatron":
         model_core = model.bert
     elif model_type == "roberta":
         model_core = model.roberta
@@ -100,11 +116,14 @@ def save_only_transformer_core(args, model):
         model_core = model.electra
     elif model_type == "deberta":
         model_core = model.deberta
+    elif model_type == "deberta-v2":
+        model_core = model.deberta_v2
     elif model_type == "longformer":
         model_core = model.longformer
     else:
-        args.logger.warning("{} is current not supported for saving model core; we will skip saving to prevent error.".format(
-            args.model_type))
+        args.logger.warning(
+            "{} is current not supported for saving model core; we will skip saving to prevent error."
+            .format(args.model_type))
         return
     model_core.save_pretrained(args.new_model_dir)
 
@@ -143,6 +162,7 @@ def check_partial_token(token_as_id, tokenizer):
             and not token.startswith('Ġ'):
         flag = True
     elif (isinstance(tokenizer, AlbertTokenizer) or
+          isinstance(tokenizer, DebertaV2Tokenizer) or
           isinstance(tokenizer, XLNetTokenizer)) \
             and not token.startswith('▁'):
         flag = True
@@ -159,6 +179,30 @@ def set_seed(seed=13):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
+
+def adversarial_train(args, trainer, model=None, batch=None, k=3):
+    # for pgd, we current hard code K as 3
+    # TODO: add argument to allow change K for PGD method
+    if args.adversarial_training_method == "fgm":
+        trainer.attack()
+        _, _, loss_adv = model(**batch)
+        loss_adv.backward()
+        trainer.restore()
+    elif args.adversarial_training_method == "pgd":
+        trainer.backup_grad()
+        for t in range(k):
+            trainer.attack(is_first_attack=(t == 0))
+            if t != k - 1:
+                model.zero_grad()
+            else:
+                trainer.restore_grad()
+            _, _, loss_adv = model(**batch)
+            loss_adv.backward()
+        trainer.restore()
+    else:
+        raise RuntimeError(
+            f"adopt adversarial training but use an unrecognized method name: {args.adversarial_training_method}")
 
 
 def train(args, model, train_features, dev_features):
@@ -194,7 +238,7 @@ def train(args, model, train_features, dev_features):
     if args.do_warmup:
         warmup_steps = np.dtype('int64').type(args.warmup_ratio * t_total)
         scheduler = get_linear_schedule_with_warmup(
-            optimizer, num_warmup_steps=warmup_steps, num_training_steps=t_total)
+            optimizer, num_warmup_steps=warmup_steps, min_lr=args.min_lr, num_training_steps=t_total)
 
     args.logger.info("***** Running training *****")
     args.logger.info("  Num data points = {}".format(len(data_loader)))
@@ -202,7 +246,8 @@ def train(args, model, train_features, dev_features):
     args.logger.info("  Instantaneous batch size per GPU = {}".format(args.train_batch_size))
     args.logger.info("  Gradient Accumulation steps = {}".format(args.gradient_accumulation_steps))
     args.logger.info("  Total optimization steps = {}".format(t_total))
-    args.logger.info("  Training steps (number of steps between two evaluation on dev) = {}".format(args.train_steps*args.gradient_accumulation_steps))
+    args.logger.info("  Training steps (number of steps between two evaluation on dev) = {}".format(
+        args.train_steps * args.gradient_accumulation_steps))
     args.logger.info("******************************")
 
     # create directory to save model
@@ -212,7 +257,7 @@ def train(args, model, train_features, dev_features):
     json_dump(args.label2idx, new_model_dir / "label2idx.json")
 
     # save base model name to a base_model_name.txt
-    with open(new_model_dir/"base_model_name.txt", "w") as f:
+    with open(new_model_dir / "base_model_name.txt", "w") as f:
         f.write('model_type: {}\nbase_model: {}\nconfig: {}\ntokenizer: {}'.format(
             args.model_type, args.pretrained_model, args.config_name, args.tokenizer_name))
 
@@ -222,14 +267,20 @@ def train(args, model, train_features, dev_features):
     early_stop_flag = 0
 
     model.zero_grad()
-    epoch_iter = trange(int(args.num_train_epochs), desc="Epoch", disable=False if args.progress_bar else True)
+
+    # apply ADVERSARIAL TRAINING
+    adversarial_trainer = ADVERSARIAL_TRAINER[args.adversarial_training_method](model) \
+        if args.adversarial_training else None
+
+    epoch_iter = trange(int(args.num_train_epochs), desc="Epoch", disable=not args.progress_bar)
     for epoch in epoch_iter:
-        batch_iter = tqdm(iterable=data_loader, desc='Batch', disable=False if args.progress_bar else True)
+        batch_iter = tqdm(iterable=data_loader, desc='Batch', disable=not args.progress_bar)
         for step, batch in enumerate(batch_iter):
             model.train()
+
             batch = tuple(b.to(args.device) for b in batch)
             train_inputs = batch_to_model_inputs(batch, args.model_type)
-            
+
             if args.fp16:
                 with autocast():
                     _, _, loss = model(**train_inputs)
@@ -243,7 +294,11 @@ def train(args, model, train_features, dev_features):
                 scaler.scale(loss).backward()
             else:
                 loss.backward()
-            
+
+            # apply ADVERSARIAL TRAINING
+            if args.adversarial_training:
+                adversarial_train(args, adversarial_trainer, model, train_inputs)
+
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if args.fp16:
                     scaler.unscale_(optimizer)
@@ -253,10 +308,10 @@ def train(args, model, train_features, dev_features):
                 else:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                     optimizer.step()
-                
+
                 if args.do_warmup:
                     scheduler.step()
-                
+
                 model.zero_grad()
                 global_step += 1
 
@@ -271,7 +326,7 @@ def train(args, model, train_features, dev_features):
                 average_train_loss: {:.4f}; 
                 eval_loss: {:.4f}; 
                 current best score: {:.4f}""".format(
-                    global_step, epoch+1, round(tr_loss / global_step, 4), eval_loss, best_score))
+                    global_step, epoch + 1, round(tr_loss / global_step, 4), eval_loss, best_score))
 
         # default model select method using strict F1-score with beta=1; evaluate model after each epoch on dev
         if args.train_steps <= 0 or epoch == 0:
@@ -283,7 +338,7 @@ def train(args, model, train_features, dev_features):
                 average_train_loss: {:.4f}; 
                 eval_loss: {:.4f}; 
                 current best score: {:.4f}""".format(
-                    global_step, epoch+1, round(tr_loss / global_step, 4), eval_loss, best_score))
+                global_step, epoch + 1, round(tr_loss / global_step, 4), eval_loss, best_score))
 
         # early stop check
         if epcoh_best_score < best_score:
@@ -330,7 +385,7 @@ def _eval(args, model, features):
             raw_logits, _, loss = model(**eval_inputs)
             # get softmax output of the raw logits (keep dimensions)
             if not args.use_crf:
-                raw_logits = torch.argmax(F.log_softmax(raw_logits, dim=2), dim=2)
+                raw_logits = torch.argmax(F.log_softmax(raw_logits, dim=-1), dim=-1)
             raw_logits = raw_logits.detach().cpu().numpy()
             # update evaluate loss
             eval_loss += loss.item()
@@ -348,7 +403,7 @@ def _eval(args, model, features):
         for mks, lbs, lgts, gds in zip(original_mask, original_labels, raw_logits, guards):
             connect_sent_flag = False
             for mk, lb, lgt, gd in zip(mks, lbs, lgts, gds):
-                if mk == 0:  
+                if mk == 0:
                     # after hit first mask, we can stop for the current sentence since all rest will be pad
                     if args.model_type == "xlnet":
                         continue
@@ -370,7 +425,7 @@ def _eval(args, model, features):
             y_pred, y_true = [], []
             prev_gd = 0
 
-    return y_trues, y_preds, round(eval_loss/eval_size, 4)
+    return y_trues, y_preds, round(eval_loss / eval_size, 4)
 
 
 def evaluate(args, model, new_model_dir, features, epoch, global_step, best_score):
@@ -387,14 +442,14 @@ def evaluate(args, model, new_model_dir, features, epoch, global_step, best_scor
 
     # select model based on best score
     # if best_score < cur_score:
-    if cur_score - best_score > 0.00005:
+    if cur_score - best_score > 1e-5:
         args.logger.info('''
         Global step: {}; 
         Epoch: {}; 
         previous best score: {:.4f}; 
         new best score: {:.4f}; 
         full evaluation metrix: {}
-        '''.format(global_step, epoch+1, best_score, cur_score, eval_metrix))
+        '''.format(global_step, epoch + 1, best_score, cur_score, eval_metrix))
         best_score = cur_score
         save_model(args, model, new_model_dir, global_step, latest=args.max_num_checkpoints)
 
@@ -455,7 +510,8 @@ def _output_bio(args, tests, preds):
             len(tokens), tokens, len(predicted_labels), predicted_labels)
         offsets = example.offsets
         if offsets:
-            new_sent = [(tk, ofs[0], ofs[1], ofs[2], ofs[3], lb) for tk, ofs, lb in zip(tokens, offsets, predicted_labels)]
+            new_sent = [(tk, ofs[0], ofs[1], ofs[2], ofs[3], lb) for tk, ofs, lb in
+                        zip(tokens, offsets, predicted_labels)]
         else:
             new_sent = [(tk, lb) for tk, lb in zip(tokens, predicted_labels)]
         new_sents.append(new_sent)
@@ -536,15 +592,10 @@ def run_task(args):
             config.label2idx = args.label2idx
             config.use_focal_loss = args.focal_loss
             config.focal_loss_gamma = args.focal_loss_gamma
+            config.mlp_dim = args.mlp_dim
             args.logger.info("New Model Config:\n{}".format(config))
         else:
             config = model_config.from_pretrained(args.config_name, num_labels=num_labels)
-
-        if args.pretrained_model == "microsoft/deberta-xlarge-v2":
-            raise NotImplementedError("""the deberta-xlarge-v2 tokenizer is different from other deberta models
-            the support for deberta-xlarge-v2 is not implemented.
-            you can try other debata models: microsoft/deberta-base, 
-            microsoft/deberta-large, microsoft/deberta-xlarge""")
 
         if args.resume_from_model is not None:
             args.config = config
@@ -575,6 +626,8 @@ def run_task(args):
 
         # set up evaluation metrics
         args.eval_tool = set_up_eval_tool(args)
+        # set up ADVERSARIAL TRAINING training
+        args.adversarial_training = True if args.adversarial_training_method is not None else False
         # start training
         train(args, model, train_features, dev_features)
         # save config and tokenizer with new model
@@ -586,10 +639,10 @@ def run_task(args):
         args.config = model_config.from_pretrained(args.new_model_dir, num_labels=num_labels)
         # args.use_crf = args.config.use_crf
         # args.model_type = args.config.model_type
-        if args.model_type in {"roberta", "bart", "longformer"}:
+        if args.model_type in {"roberta", "bart", "longformer", "deberta"}:
             # we need to set add_prefix_space to True for roberta, longformer, and Bart (any tokenizer from GPT-2)
             tokenizer = model_tokenizer.from_pretrained(
-                args.tokenizer_name, do_lower_case=args.do_lower_case, add_prefix_space=True)
+                args.new_model_dir, do_lower_case=args.do_lower_case, add_prefix_space=True)
         else:
             args.tokenizer = model_tokenizer.from_pretrained(args.new_model_dir, do_lower_case=args.do_lower_case)
         model = load_model(args)

@@ -30,6 +30,7 @@ class Args:
         self.train_batch_size = 4
         self.eval_batch_size = 4
         self.learning_rate = 0.00001
+        self.min_lr = 1e-6
         self.seed = 13
         self.logger = TransformerNERLogger(
             logger_level="i",
@@ -57,14 +58,23 @@ class Args:
         self.focal_loss = False
         self.focal_loss_gamma = 2
         self.resume_from_model = resume_from_model
+        self.use_biaffine = False
+        self.mlp_dim = 128
+        self.mlp_layers = 0
+        self.adversarial_training_method = None  # None, "fgm", "pgd"
 
 
 def test():
     # test training
-    for each in [('bert', 'bert-base-uncased'),
-                 ('deberta', "microsoft/deberta-base"),
-                 ('roberta', 'roberta-base'),
-                 ('xlnet', 'xlnet-base-cased')]:
+    for each in [
+        ('bert', 'bert-base-uncased'),
+        ('deberta-v2', "microsoft/deberta-xlarge-v2"),
+        ("megatron",
+         "/Users/alexgre/workspace/py3/HOBI-lab/models/345m_uf_full_deid_pubmed_mimic_wiki_fullcased50k_release"),
+        ('deberta', "microsoft/deberta-base"),
+        ('roberta', 'roberta-base'),
+        ('xlnet', 'xlnet-base-cased')
+    ]:
         args = Args(each[0], each[1], do_train=True, do_predict=False)
         run_task(args)
 
@@ -85,11 +95,22 @@ def test2():
     run_task(args)
 
 
+def test3():
+    # test prediction
+    args = Args("bert", 'bert-base-uncased', do_train=True, do_predict=True,
+                new_model_dir=Path(
+                    __file__).resolve().parent.parent.parent / "new_ner_model" / "bert-base-uncased_conll2003")
+    args.use_crf = True
+    run_task(args)
+
+
 if __name__ == '__main__':
-    which_test = input("run which test? 1 or 2")
-    if which_test == "1":
+    which_test = input("run which test? 1 or 2 or 3")
+    if which_test == "0":
         test()
-    elif which_test == "2":
+    elif which_test == "1":
         test1()
-    else:
+    elif which_test == "2":
         test2()
+    elif which_test == "3":
+        test3()

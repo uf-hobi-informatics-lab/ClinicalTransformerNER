@@ -11,7 +11,7 @@ from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
 from transformers import (AlbertTokenizer, BartTokenizer, BertTokenizer,
                           DebertaTokenizer, DistilBertTokenizer,
                           ElectraTokenizer, LongformerTokenizer,
-                          RobertaTokenizer, XLNetTokenizer)
+                          RobertaTokenizer, XLNetTokenizer, DebertaV2Tokenizer)
 
 NEXT_TOKEN = "[next]"
 NEXT_GUARD = -2
@@ -77,7 +77,7 @@ class TransformerNerDataProcessor(object):
         default is used to initialized the label2idx dict; will support bert, roberta and xlnet
         the system labels must be smaller than label id for 'O', otherwise there will be errors in prediction
         """
-        if default in {'bert', 'roberta', 'albert',
+        if default in {'bert', 'megatron', 'roberta', 'albert',
                        'distilbert', 'bart', 'xlnet',
                        'electra', 'deberta', 'longformer',
                        'deberta-v2'} and not customized_label2idx:
@@ -175,6 +175,7 @@ def __seq2fea(new_tokens, new_labels, guards, tokenizer, max_seq_length, label2i
     if isinstance(tokenizer, BertTokenizer) or \
             isinstance(tokenizer, DistilBertTokenizer) or \
             isinstance(tokenizer, ElectraTokenizer) or \
+            isinstance(tokenizer, DebertaV2Tokenizer) or \
             isinstance(tokenizer, DebertaTokenizer):
         s_tk, e_tk, pad_tk = '[CLS]', '[SEP]', '[PAD]'
     elif isinstance(tokenizer, RobertaTokenizer) or \
@@ -389,7 +390,7 @@ def ner_data_loader(dataset, batch_size=2, task='train', auto=False):
 
 
 def batch_to_model_inputs(batch, model_type='bert'):
-    if model_type in {"bert", "albert", "distilbert", "xlnet", "electra", 'deberta'}:
+    if model_type in {"bert", "megatron", "albert", "distilbert", "xlnet", "electra", 'deberta', 'deberta-v2'}:
         inputs = {
             'input_ids': batch[0],
             'attention_mask': batch[1],

@@ -3,13 +3,14 @@
 
 import argparse
 import warnings
-from traceback import format_exc
+import traceback
 
 import torch
 import transformers
 from packaging import version
 
 from transformer_ner.task import run_task
+from transformer_biaffine_ner.task import run_task as run_biaffine_task
 from transformer_ner.transfomer_log import TransformerNERLogger
 
 pytorch_version = version.parse(transformers.__version__)
@@ -68,7 +69,9 @@ def main():
                         help="Number of trianing steps between two evaluations on the dev set; "
                              "if <0 then evaluate after each epoch")
     parser.add_argument("--learning_rate", default=1e-5, type=float,
-                        help="The initial learning rate for Adam.")
+                        help="The initial learning rate for optimizer.")
+    parser.add_argument("--min_lr", default=1e-6, type=float,
+                        help="The minimum number that lr can decay to.")
     parser.add_argument("--num_train_epochs", default=10, type=float,
                         help="Total number of training epochs to perform.")
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1,
@@ -98,15 +101,22 @@ def main():
                         help="use focal loss function instead of cross entropy loss")
     parser.add_argument("--focal_loss_gamma", default=2, type=int,
                         help="the gamma hyperparameter in focal loss, commonly use 1 or 2")
+    parser.add_argument("--use_biaffine", action='store_true',
+                        help="Whether to use biaffine for NER (https://www.aclweb.org/anthology/2020.acl-main.577/).")
+    parser.add_argument("--mlp_dim", default=128, type=int,
+                        help="The dimension for MLP layer in biaffine module, default to 128."
+                             "If set this value <= 0, we use transformer model hidden layer dimension")
+    parser.add_argument("--mlp_layers", default=0, type=int,
+                        help="The number of layers in MLP in biaffine module, default to 0 (1 linear layer).")
+    # adversarial training method: pgd, fgm
+    parser.add_argument("--adversarial_training_method", default=None,
+                        help="what method to use for adversarial training, support pgd and fgm; "
+                             "default is None which disable this function")
     # fp16 and distributed training (we use pytorch naive implementation instead of Apex)
     parser.add_argument('--fp16', action='store_true',
                         help="Whether to use 16-bit float precision instead of 32-bit")
-    # parser.add_argument("--fp16_opt_level", type=str, default="O1",
-    #                     help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
-    #                          "See details at https://nvidia.github.io/apex/amp.html")
+    #  TODO: data parallel - support single node multi GPUs (use deepspeed only or pytorch naive ddp?)
     # parser.add_argument("--local_rank", type=int, default=-1, help="local_rank for distributed training on gpus")
-    # parser.add_argument('--server_ip', type=str, default='', help="Can be used for distant debugging.")
-    # parser.add_argument('--server_port', type=str, default='', help="Can be used for distant debugging.")
 
     global_args = parser.parse_args()
 
@@ -117,7 +127,8 @@ def main():
     # set and check cuda (we recommend to set up CUDA device in shell)
     # os.environ['CUDA_VISIBLE_DEVICES'] = global_args.cuda_ids
     global_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info("Task will use cuda device: GPU_{}.".format(torch.cuda.current_device()) if torch.cuda.device_count() else 'Task will use CPU.')
+    logger.info("Task will use cuda device: GPU_{}.".format(
+        torch.cuda.current_device()) if torch.cuda.device_count() else 'Task will use CPU.')
 
     # if use resume_from_model, then resume_from_model will overwrite pretrained_model
     if global_args.resume_from_model:
@@ -140,14 +151,22 @@ def main():
         raise RuntimeError("Running prediction but predict output file is not set.")
 
     if global_args.focal_loss and global_args.use_crf:
-        warnings.warn("Using CRF cannot apply focal loss. CRF has its own loss function.")
+        warnings.warn(
+            "Using CRF cannot apply focal loss. CRF use viterbi decoding and loss will be calculated independently.")
         warnings.warn("We will overwrite focal loss to false and use CRF as default.")
         global_args.focal_loss = False
 
+    if global_args.use_crf and global_args.use_biaffine:
+        raise RuntimeError("You can not run both CRF and biaffine. Choose only one or None of them to proceed.")
+
     try:
-        run_task(global_args)
+        if global_args.use_biaffine:
+            run_biaffine_task(global_args)
+        else:
+            run_task(global_args)
     except Exception as ex:
-        logger.error(format_exc())
+        traceback.print_exc()
+        logger.error(traceback.format_exc())
 
 
 if __name__ == '__main__':

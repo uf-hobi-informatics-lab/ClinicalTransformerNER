@@ -34,13 +34,16 @@ def main(args):
     idx2label = {v: k for k, v in label2idx.items()}
     args.label2idx = label2idx
     args.idx2label = idx2label
+
     # get config, model and tokenizer
     model_config, _, model_tokenizer = MODEL_CLASSES[args.model_type]
     tokenizer = model_tokenizer.from_pretrained(args.pretrained_model, do_lower_case=args.do_lower_case)
     args.tokenizer = tokenizer
+
     config = model_config.from_pretrained(args.pretrained_model, do_lower_case=args.do_lower_case)
     args.config = config
     args.use_crf = config.use_crf
+
     model = load_model(args, args.pretrained_model)
     model.to(args.device)
 
@@ -110,9 +113,6 @@ if __name__ == '__main__':
                         help="if copy the original plain text to output folder")
     parser.add_argument("--progress_bar", action='store_true',
                         help="show progress during the training in tqdm")
-    # do not need crf argument since config will have this information
-    # parser.add_argument("--use_crf", action='store_true',
-    #                     help="Whether to use crf layer as classifier.")
 
     global_args = parser.parse_args()
     # create logger
