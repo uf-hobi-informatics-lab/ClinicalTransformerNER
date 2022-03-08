@@ -36,6 +36,7 @@ def _get_label_from_span(span_in_batch):
 def _get_predictions(args, model, data_loader):
     y_trues, y_preds = [], []
     tok_ids = []
+    sub_indexes = []
     eval_loss = .0
     total_samples = len(data_loader)
 
@@ -44,6 +45,7 @@ def _get_predictions(args, model, data_loader):
         batch_iter = tqdm(iterable=data_loader, desc='evaluation', disable=not args.progress_bar)
         for step, batch in enumerate(batch_iter):
             token_ids = batch[0].numpy()
+            sub_index = batch[5].numpy()
             labels = batch[3].numpy()
             label_masks = batch[4].numpy()
 
@@ -60,11 +62,12 @@ def _get_predictions(args, model, data_loader):
             y_true = _get_label_from_span(labels)
             y_pred = _get_label_from_span(preds)
 
-            y_trues.extend(y_true)
-            y_preds.extend(y_pred)
-            tok_ids.extend(token_ids)
+            y_trues.append(y_true)
+            y_preds.append(y_pred)
+            tok_ids.append(token_ids)
+            sub_indexes.append(sub_index)
 
-    return y_trues, y_preds, tok_ids, round(eval_loss / total_samples, 4)
+    return y_trues, y_preds, tok_ids, sub_indexes, round(eval_loss / total_samples, 4)
 
 
 def _get_eval_metrics(labels, preds):
@@ -91,13 +94,13 @@ def _evaluate(args, prev_best_score, model, new_model_dir, global_step, data_loa
     args.logger.info("  Instantaneous batch size per GPU = {}".format(args.eval_batch_size))
     args.logger.info("******************************")
 
-    y_trues, y_preds, _, loss = _get_predictions(args, model, data_loader)
+    y_trues, y_preds, _, _, loss = _get_predictions(args, model, data_loader)
 
     precision, recall, f1 = _get_eval_metrics(y_trues, y_preds)
 
     # save model if eval score is better (at least 1e-5 improvement)
     new_best_score = prev_best_score
-    if f1 - prev_best_score > 5e-6:
+    if f1 - prev_best_score > 1e-6:
         args.logger.info('''
         previous best score: {:.4f}; 
         new best score: {:.4f}; 
@@ -108,18 +111,18 @@ def _evaluate(args, prev_best_score, model, new_model_dir, global_step, data_loa
     return new_best_score, f1, precision, recall, loss
 
 
-def _get_decode_mapping(tok_ids, cur_index, query_word, tokenizer=None):
-    while cur_index < len(tok_ids):
-        j = cur_index + 1
-        while j <= len(tok_ids):
-            en = tokenizer.decode(tok_ids[cur_index: j], clean_up_tokenization_spaces=False).strip()
-            if en == query_word:
-                return cur_index, j
-            j += 1
-        cur_index += 1
-
-    raise RuntimeError(f"Cannot map indexes for {query_word} in"
-                       f"\n{tokenizer.decode(tok_ids, skip_special_tokens=True).strip().split()}")
+# def _get_decode_mapping(tok_ids, cur_index, query_word, tokenizer=None):
+#     while cur_index < len(tok_ids):
+#         j = cur_index + 1
+#         while j <= len(tok_ids):
+#             en = tokenizer.decode(tok_ids[cur_index: j], clean_up_tokenization_spaces=False).strip()
+#             if en == query_word:
+#                 return cur_index, j
+#             j += 1
+#         cur_index += 1
+#
+#     raise RuntimeError(f"Cannot map indexes for {query_word} in"
+#                        f"\n{tokenizer.decode(tok_ids, skip_special_tokens=True).strip().split()}")
 
 
 def _decode_index_mapping(map_table, s, e):
@@ -143,43 +146,78 @@ def predict(args, data_loader):
     model = load_model(args)
     model.to(args.device)
 
-    _, preds, tok_ids, _ = _get_predictions(args, model, data_loader)
-    assert len(preds) == len(tok_ids), \
-        f"pred: {len(preds)} sentences but tokens has {len(tok_ids)} sentences"
+    _, preds, tok_ids, sub_indexes, _ = _get_predictions(args, model, data_loader)
+    assert len(preds) == len(tok_ids) == len(sub_indexes), \
+        f"pred: {len(preds)} sentences; tokens: {len(tok_ids)} sentences; indexes: {len(sub_indexes)} sentences"
 
     predicted_outputs = []
-    # TODO: parallel this part
-    for pred, tok_id in tqdm(zip(preds, tok_ids), total=len(tok_ids), desc="prediction decoding..."):
+    for pred, tok_id, sub_index in tqdm(zip(preds, tok_ids, sub_indexes), total=len(tok_ids), desc="decoding"):
         output = []
-        sent_text = args.tokenizer.decode(
-            tok_id, skip_special_tokens=True, clean_up_tokenization_spaces=False).strip().split(" ")
 
-        # build a token remap to map tok ids positions to token positions after decode
+        # using sub_index to create index remap
         indexes_remap = dict()
-        cur_index = 0
-        for i, word in enumerate(sent_text):
-            word = word.strip()
-            cur_index, new_index = _get_decode_mapping(tok_id, cur_index, query_word=word, tokenizer=args.tokenizer)
-            indexes_remap[i] = (cur_index, new_index)
-            cur_index = new_index
+        for i, idx in enumerate(sub_index):
+            if idx == 0:
+                continue
+            if idx in indexes_remap:
+                indexes_remap[idx][1] = i
+            else:
+                indexes_remap[idx] = [i, i]
+
+        sent_text = args.tokenizer.decode(tok_id, skip_special_tokens=True)
 
         for each in pred:
             en_type_id, s, e = each
-            en = args.tokenizer.decode(tok_id[s: e + 1], clean_up_tokenization_spaces=False).strip()
+            en_text = args.tokenizer.decode(tok_id[s: e + 1], clean_up_tokenization_spaces=False)
+
             new_s, new_e = _decode_index_mapping(indexes_remap, s, e)
+
+            # in case s, e cannot be mapped
+            if not new_s or not new_e:
+                args.logger.warning(f"cannot decode entity at ({s}, {e})\nentity: {en_text}\nsentence: {sent_text}")
+                continue
+
+            # for list slice
             new_e += 1
-            # check if decode is right
-            en_check = " ".join(sent_text[new_s: new_e])
-            if en != en_check:
-                args.logger.warning(f"decode error: expect: {en} but get "
-                                    f"{en_check}\n"
-                                    f"{[e for e in tok_id if e != args.tokenizer.pad_token_id]}\n"
-                                    f"{sent_text}\n{each}")
 
             en_type = args.config.idx2label[int(en_type_id)]
 
-            output.append((en, en_type, new_s, new_e))
+            output.append((en_type, new_s, new_e, en_text))
+
+        # note: sent_text and en_text cannot be used for sanity check / only for visual check
         predicted_outputs.append({"tokens": sent_text, "entities": output})
+
+        #################################################################################################
+        # # due to inconsistent behavior of decode function, the following decoding is not working correctly
+        # sent_text = args.tokenizer.decode(
+        #     tok_id, skip_special_tokens=True, clean_up_tokenization_spaces=False).strip().split(" ")
+
+        # build a token remap to map tok ids positions to token positions
+        # indexes_remap = dict()
+        # cur_index = 0
+        # for i, word in enumerate(sent_text):
+        #     word = word.strip()
+        #     cur_index, new_index = _get_decode_mapping(tok_id, cur_index, query_word=word, tokenizer=args.tokenizer)
+        #     indexes_remap[i] = (cur_index, new_index)
+        #     cur_index = new_index
+
+        # for each in pred:
+        #     en_type_id, s, e = each
+        #     en = args.tokenizer.decode(tok_id[s: e + 1], clean_up_tokenization_spaces=False).strip()
+        #     new_s, new_e = _decode_index_mapping(indexes_remap, s, e)
+        #     new_e += 1
+        #     # check if decode is right
+        #     en_check = " ".join(sent_text[new_s: new_e])
+        #     if en != en_check:
+        #         args.logger.warning(f"decode error: expect: {en} but get "
+        #                             f"{en_check}\n"
+        #                             f"{[e for e in tok_id if e != args.tokenizer.pad_token_id]}\n"
+        #                             f"{sent_text}\n{each}")
+        #
+        #     en_type = args.config.idx2label[int(en_type_id)]
+        #     output.append((en, en_type, new_s, new_e))
+        # predicted_outputs.append({"tokens": sent_text, "entities": output})
+        #################################################################################################
 
     return predicted_outputs
 
