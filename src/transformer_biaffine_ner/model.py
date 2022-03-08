@@ -5,6 +5,7 @@
 import torch
 from torch import nn
 from transformers import AutoModel, AutoConfig, PreTrainedModel
+from transformer_ner.model_utils import FocalLoss
 
 
 class MLP(nn.Module):
@@ -12,8 +13,9 @@ class MLP(nn.Module):
         super().__init__()
         self.weight = None
         # TODO: test Relu and LeakyRelu (negative_slope=0.1) linear activation
-        # TODO: test if dropout need (SharedDropout)
+        # TODO: test if dropout need (SharedDropout) we hard code dropout as 0.1
         activation_fct = nn.GELU()
+        dropout = nn.Dropout(0.1)
         if num_hidden_layers and hidden_dim:
             # if num_hidden_layers = 1, then we have two layers
             layers = []
@@ -24,10 +26,10 @@ class MLP(nn.Module):
                     layers.append(nn.Linear(hidden_dim, hidden_dim))
                 # should test Relu and LeakyRelu (negative_slope=0.1)
                 layers.append(activation_fct)
-            self.weight = nn.Sequential(*layers, nn.Linear(hidden_dim, output_dim), activation_fct)
+            self.weight = nn.Sequential(*layers, nn.Linear(hidden_dim, output_dim), activation_fct, dropout)
         else:
             # only one linear layer
-            self.weight = nn.Sequential(nn.Linear(input_dim, output_dim), activation_fct)
+            self.weight = nn.Sequential(nn.Linear(input_dim, output_dim), activation_fct, dropout)
 
     def forward(self, x):
         return self.weight(x)
@@ -133,8 +135,12 @@ class BiaffineLayer(nn.Module):
         # ffnne: feed forward neural network end
         self.ffnne = MLP(mlp_input_dim, mlp_output_dim, config.mlp_dim, config.mlp_layers)
         self.biaffine = Biaffine(mlp_output_dim, config.num_labels)
-        self.loss_fct = nn.CrossEntropyLoss()
+
         self.config = config
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
+            self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
+        else:
+            self.loss_fct = nn.CrossEntropyLoss()
 
     def biaffine_loss_calculation(self, preds, labels, masks):
         active_idx = masks.view(-1) == 1
@@ -167,6 +173,7 @@ class TransformerBiaffineNerModel(nn.Module):
             self.lm = AutoModel.from_config(config=config)
 
         self.biaffine = BiaffineLayer(config)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def resize_token_embeddings(self, new_size):
         self.lm.resize_token_embeddings(new_size)
@@ -178,10 +185,14 @@ class TransformerBiaffineNerModel(nn.Module):
                 position_ids=None,
                 labels=None,
                 masks=None):
+        # obtain representations from pretrained language model
         lm_representatons = self.lm(input_ids,
                                     attention_mask=attention_mask,
                                     token_type_ids=token_type_ids,
                                     position_ids=position_ids)
+        # here we only get the last layers; can get last two layers and do avg
         tokens_representations = lm_representatons[0]
+        tokens_representations = self.dropout(tokens_representations)
+
         logits, loss = self.biaffine(tokens_representations, labels, masks)
         return logits, loss
