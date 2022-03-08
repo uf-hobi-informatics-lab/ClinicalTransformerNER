@@ -109,11 +109,12 @@ python ./src/run_transformer_batch_prediction.py \
 ####
 # note: If you use do_format, then we have two outputs: 
 # 1) all bio outputs in output_dir; 
-# 2) 2) we create a formatted output dir (this dir's name is output_dir's name with a suffix of '_formatted_output') for the formatted # outputs (brat format if you set do_format=1). If you set --do_copy, we will copy the .txt files to the formatted output dir, otherwise we only put .ann files in the formatted output dir.
+# 2) 2) we create a formatted output dir (this directory's name is output_dir's name with a suffix of '_formatted_output') for the formatted # outputs (brat format if you set do_format=1). If you set --do_copy, we will copy the .txt files to the formatted output dir, otherwise we only put .ann files in the formatted output dir.
 ####
 ```
 
 ## Usage and example (biaffine approach)
+- implementation of https://aclanthology.org/2020.acl-main.577.pdf
 - see tutorial/convert_other_format_data_to_biaffine_format.ipynb for how to construct data from brat or bio format for biaffine model
 - training with biaffine, you just need to set the --use_biaffine flag
 - you can use any transformers as encoder, we use biaffine to decode
@@ -123,7 +124,7 @@ python ./src/run_transformer_batch_prediction.py \
 - you can use run_format_biaffine_output.py to convert format to BIO or brat
 - example
 ```shell
-# training and prediction (predict to BIO format)
+# training and prediction (predict to biaffine format)
 export CUDA_VISIBLE_DEVICES=0
 python src/run_transformer_ner.py \
       --use_biaffine \
@@ -152,18 +153,30 @@ python src/run_transformer_ner.py \
       --log_file ./log.txt \
       --progress_bar \
       --early_stop 3
+```
 
-# batch prediction (predict to brat format)
+- reformat output to brat and do evaluation
+```shell
+python run_format_biaffine_output.py \
+  --raw_input_file <where the test data located> \
+  --biaffine_output_file <where is the biaffine output json file> \
+
+```
+
+- batch prediction (predict to brat format)
+```shell
+
 ```
 
 ## Tutorial
 > we have tutorials in the tutorial directory
 - brat2bio.ipynb is an example on how to write code to covert brat format annotation to BIO format which used for training and test 
 - pipeline_preprocessing_training_prediction.ipynb is a full pipeline example from data preprocessing to training to prediction to evaluation
+- convert_other_format_data_to_biaffine_format.ipynb is for how to generate data for biaffine model from other formats (BIO, BRAT)
 - note: in full pipeline example, we used our NLPreprocessing package which is customized for clinical notes but may have issues if the notes have some unique format in it.
 
 ## Wiki for all parameters
-[wiki](https://github.com/uf-hobi-informatics-lab/ClinicalTransformerNER/wiki/Parameters)
+[wiki link to description of all arguments](https://github.com/uf-hobi-informatics-lab/ClinicalTransformerNER/wiki/Parameters)
 
 ## Organization
 - Department of Health Outcomes and Biomedical Informatics, College of Medicine, University of Florida

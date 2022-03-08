@@ -62,10 +62,10 @@ def _get_predictions(args, model, data_loader):
             y_true = _get_label_from_span(labels)
             y_pred = _get_label_from_span(preds)
 
-            y_trues.append(y_true)
-            y_preds.append(y_pred)
-            tok_ids.append(token_ids)
-            sub_indexes.append(sub_index)
+            y_trues.extend(y_true)
+            y_preds.extend(y_pred)
+            tok_ids.extend(token_ids)
+            sub_indexes.extend(sub_index)
 
     return y_trues, y_preds, tok_ids, sub_indexes, round(eval_loss / total_samples, 4)
 
@@ -159,10 +159,12 @@ def predict(args, data_loader):
         for i, idx in enumerate(sub_index):
             if idx == 0:
                 continue
-            if idx in indexes_remap:
-                indexes_remap[idx][1] = i
+            # idx start with special token, we need to subtract 1 to re-align to original index
+            org_idx = idx - 1
+            if org_idx in indexes_remap:
+                indexes_remap[org_idx][1] = i
             else:
-                indexes_remap[idx] = [i, i]
+                indexes_remap[org_idx] = [i, i]
 
         sent_text = args.tokenizer.decode(tok_id, skip_special_tokens=True)
 
