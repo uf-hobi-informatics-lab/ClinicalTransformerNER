@@ -72,7 +72,7 @@ class Biaffine(nn.Module):
         hs(i) = FFNNs(xsi)
         he(i) = FFNNe(xei)
         we implement following
-        rm(i) = hs(i)T*U*he(i) + Wm(hs(i)⊕he(i)) + bm
+        rm(i) = hs(i)T*U*he(i) + (Wm(hs(i)⊕he(i)) + bm)
         """
 
         # hs(i)*U*he(i)T
@@ -84,42 +84,51 @@ class Biaffine(nn.Module):
         yp = torch.unsqueeze(y, dim=1)
         yp = torch.tile(yp, (1, x.shape[-2], 1, 1))
         xp_yp = torch.concat((xp, yp), dim=-1)
-        xp_yp = torch.cat([xp_yp, torch.ones_like(xp_yp[..., :1])], dim=-1)
+        xp_yp = torch.concat([xp_yp, torch.ones_like(xp_yp[..., :1])], dim=-1)
         biaffine_tail = torch.einsum("bxym,mo->bxyo", xp_yp, self.W)
 
         return biaffine_head_tail + biaffine_tail
 
 
-# class Biaffine(nn.Module):
-#     def __init__(self, input_dim, output_dim, bias_x=True, bias_y=True):
-#         super().__init__()
-#         self.bx = bias_x
-#         self.by = bias_y
-#         self.output_dim = output_dim
-#
-#         linear_input_dim = input_dim + int(bias_x)
-#         new_output_dim = input_dim + int(bias_y)
-#         linear_output_dim = output_dim * new_output_dim
-#         self.linear = nn.Linear(linear_input_dim, linear_output_dim)
-#
-#     def forward(self, x, y):
-#         assert x.shape == y.shape
-#         bz, seq_len, _ = x.shape
-#
-#         if self.bx:
-#             x = torch.cat([x, torch.ones_like(x[..., :1])], dim=-1)
-#         if self.by:
-#             y = torch.cat([y, torch.ones_like(y[..., :1])], dim=-1)
-#
-#         affine = self.linear(x)
-#         affine = torch.reshape(affine, (bz, seq_len*self.output_dim, -1))
-#         biaffine = torch.matmul(affine, torch.permute(y, (0, 2, 1)))
-#         biaffine = torch.permute(biaffine, (0, 2, 1))
-#         biaffine = torch.reshape(biaffine, (bz, seq_len, seq_len, -1))
-#         # squeeze last dim if 1
-#         biaffine = torch.squeeze(biaffine, dim=-1)
-#
-#         return biaffine
+class _Biaffine(nn.Module):
+    # implementation without torch.einsum
+    def __init__(self, input_dim, output_dim, bias_x=True, bias_y=True):
+        super().__init__()
+        self.bx = bias_x
+        self.by = bias_y
+        self.output_dim = output_dim
+
+        linear_input_dim = input_dim + int(bias_x)
+        new_output_dim = input_dim + int(bias_y)
+        linear_output_dim = output_dim * new_output_dim
+        self.linear = nn.Linear(linear_input_dim, linear_output_dim)
+        self.W = nn.Linear(2 * linear_input_dim, linear_output_dim)
+
+    def forward(self, x, y):
+        assert x.shape == y.shape
+        bz, seq_len, _ = x.shape
+
+        if self.bx:
+            x = torch.cat([x, torch.ones_like(x[..., :1])], dim=-1)
+        if self.by:
+            y = torch.cat([y, torch.ones_like(y[..., :1])], dim=-1)
+
+        affine = self.linear(x)
+        affine = torch.reshape(affine, (bz, seq_len*self.output_dim, -1))
+        biaffine = torch.matmul(affine, torch.permute(y, (0, 2, 1)))
+        biaffine = torch.permute(biaffine, (0, 2, 1))
+        biaffine = torch.reshape(biaffine, (bz, seq_len, seq_len, -1))
+        # squeeze last dim if 1
+        biaffine_1 = torch.squeeze(biaffine, dim=-1)
+
+        xb = torch.unsqueeze(x, 2)
+        xb = torch.tile(xb, (1, 1, y.shape[-2], 1))
+        yb = torch.unsqueeze(y, 1)
+        yb = torch.tile(yb, (1, x.shape[-2], 1, 1))
+        xb_yb = torch.concat((xb, yb), -1)
+        biaffine_2 = self.W(xb_yb)
+
+        return biaffine_1 + biaffine_2
 
 
 class BiaffineLayer(nn.Module):
