@@ -9,12 +9,12 @@ from common_utils.output_format_converter import biaffine2brat, biaffine2bio
 
 
 def main(args):
-    if args.do_format:
+    if args.do_format == 1:
         # to brat
-        pass
+        biaffine2brat()
     else:
         # to bio
-        pass
+        biaffine2bio()
 
 
 if __name__ == '__main__':

@@ -175,16 +175,16 @@ def predict(args, data_loader):
             new_s, new_e = _decode_index_mapping(indexes_remap, s, e)
 
             # in case s, e cannot be mapped
-            if not new_s or not new_e:
+            if new_s is None or new_e is None:
                 args.logger.warning(f"cannot decode entity at ({s}, {e})\nentity: {en_text}\nsentence: {sent_text}")
                 continue
 
             # for list slice
             new_e += 1
 
-            en_type = args.config.idx2label[int(en_type_id)]
+            en_type = args.config.idx2label[en_type_id]
 
-            output.append((en_type, new_s, new_e, en_text))
+            output.append((en_type, int(new_s), int(new_e), en_text))
 
         # note: sent_text and en_text cannot be used for sanity check / only for visual check
         predicted_outputs.append({"tokens": sent_text, "entities": output})

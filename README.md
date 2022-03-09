@@ -141,10 +141,11 @@ python src/run_transformer_ner.py \
       --do_predict \
       --do_lower_case \
       --train_batch_size 4 \
-      --eval_batch_size 8 \
-      --train_steps 500 \
-      --learning_rate 1e-5 \
-      --num_train_epochs 1 \
+      --eval_batch_size 32 \
+      --train_steps 1000 \
+      --learning_rate 5e-5 \
+      --min_lr 5e-6 \
+      --num_train_epochs 50 \
       --gradient_accumulation_steps 1 \
       --do_warmup \
       --warmup_ratio 0.1 \
@@ -152,15 +153,18 @@ python src/run_transformer_ner.py \
       --max_num_checkpoints 1 \
       --log_file ./log.txt \
       --progress_bar \
-      --early_stop 3
+      --early_stop 5
 ```
 
 - reformat output to brat and do evaluation
 ```shell
+# to BIO format; we also support to brat format
 python run_format_biaffine_output.py \
   --raw_input_file <where the test data located> \
   --biaffine_output_file <where is the biaffine output json file> \
 
+# BIO evaluation
+python eval_scripts/new_bio_eval.py --f1 ./test_data/conll-2003/test.txt --f2 <formatted output file>
 ```
 
 - batch prediction (predict to brat format)
