@@ -13,8 +13,8 @@ class MLP(nn.Module):
         super().__init__()
         self.weight = None
         # TODO: test Relu and LeakyRelu (negative_slope=0.1) linear activation
-        # TODO: test if dropout need (SharedDropout) we hard code dropout as 0.1
         activation_fct = nn.GELU()
+        # we hard code dropout as 0.1
         dropout = nn.Dropout(0.1)
         if num_hidden_layers and hidden_dim:
             # if num_hidden_layers = 1, then we have two layers
@@ -45,16 +45,11 @@ class Biaffine(nn.Module):
         self.U = nn.Parameter(
             torch.Tensor(input_dim + int(bias_x), output_dim, input_dim + int(bias_y)))
 
-        # W
-        wdim = input_dim + int(bias_x) + input_dim + int(bias_y) + 1  # 1 is for bias
-        self.W = nn.Parameter(torch.Tensor(wdim, output_dim))
-
-        # use _normal init; we can test other init method: xavier, kaiming, ones
-        nn.init.normal_(self.U)
-        nn.init.normal_(self.W)
+        # use xavier_norm init; we can test other init method: norm_, kaiming, ones
+        nn.init.xavier_normal_(self.U)
 
     def forward(self, x, y):
-        # add bias
+        # add bias => Wm(hs(i)⊕he(i)) + bm
         if self.bx:
             x = torch.cat([x, torch.ones_like(x[..., :1])], dim=-1)
         if self.by:
@@ -75,19 +70,9 @@ class Biaffine(nn.Module):
         rm(i) = hs(i)T*U*he(i) + (Wm(hs(i)⊕he(i)) + bm)
         """
 
-        # hs(i)*U*he(i)T
-        biaffine_head_tail = torch.einsum('bxi,ioj,byj->bxyo', x, self.U, y)
+        biaffine_rep = torch.einsum('bxi,ioj,byj->bxyo', x, self.U, y)
 
-        # Wm(hs(i)⊕he(i)) + bm
-        xp = torch.unsqueeze(x, dim=2)
-        xp = torch.tile(xp, (1, 1, y.shape[-2], 1))
-        yp = torch.unsqueeze(y, dim=1)
-        yp = torch.tile(yp, (1, x.shape[-2], 1, 1))
-        xp_yp = torch.concat((xp, yp), dim=-1)
-        xp_yp = torch.concat([xp_yp, torch.ones_like(xp_yp[..., :1])], dim=-1)
-        biaffine_tail = torch.einsum("bxym,mo->bxyo", xp_yp, self.W)
-
-        return biaffine_head_tail + biaffine_tail
+        return biaffine_rep
 
 
 class _Biaffine(nn.Module):
@@ -102,7 +87,6 @@ class _Biaffine(nn.Module):
         new_output_dim = input_dim + int(bias_y)
         linear_output_dim = output_dim * new_output_dim
         self.linear = nn.Linear(linear_input_dim, linear_output_dim)
-        self.W = nn.Linear(2 * linear_input_dim, linear_output_dim)
 
     def forward(self, x, y):
         assert x.shape == y.shape
@@ -119,16 +103,9 @@ class _Biaffine(nn.Module):
         biaffine = torch.permute(biaffine, (0, 2, 1))
         biaffine = torch.reshape(biaffine, (bz, seq_len, seq_len, -1))
         # squeeze last dim if 1
-        biaffine_1 = torch.squeeze(biaffine, dim=-1)
+        biaffine = torch.squeeze(biaffine, dim=-1)
 
-        xb = torch.unsqueeze(x, 2)
-        xb = torch.tile(xb, (1, 1, y.shape[-2], 1))
-        yb = torch.unsqueeze(y, 1)
-        yb = torch.tile(yb, (1, x.shape[-2], 1, 1))
-        xb_yb = torch.concat((xb, yb), -1)
-        biaffine_2 = self.W(xb_yb)
-
-        return biaffine_1 + biaffine_2
+        return biaffine
 
 
 class BiaffineLayer(nn.Module):
@@ -139,10 +116,11 @@ class BiaffineLayer(nn.Module):
         # mlp_input_dim = config.hidden_size if config.include_only_bert_last_hidden else config.hidden_size*2
         mlp_input_dim = config.hidden_size
         mlp_output_dim = config.mlp_dim if config.mlp_dim > 0 else config.hidden_size
+        mlp_hidden_dim = config.mlp_hidden_dim
         # ffnns: feed forward neural network start
-        self.ffnns = MLP(mlp_input_dim, mlp_output_dim, config.mlp_dim, config.mlp_layers)
+        self.ffnns = MLP(mlp_input_dim, mlp_output_dim, mlp_hidden_dim, config.mlp_layers)
         # ffnne: feed forward neural network end
-        self.ffnne = MLP(mlp_input_dim, mlp_output_dim, config.mlp_dim, config.mlp_layers)
+        self.ffnne = MLP(mlp_input_dim, mlp_output_dim, mlp_hidden_dim, config.mlp_layers)
         self.biaffine = Biaffine(mlp_output_dim, config.num_labels)
 
         self.config = config

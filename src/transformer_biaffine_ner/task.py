@@ -60,6 +60,7 @@ def run_task(args):
         args.config.vocab_size = len(args.tokenizer)
         args.config.mlp_dim = args.mlp_dim
         args.config.mlp_layers = args.mlp_layers
+        args.config.mlp_hidden_dim = args.mlp_hidden_dim
         args.config.use_focal_loss = args.focal_loss
         args.config.focal_loss_gamma = args.focal_loss_gamma
         args.logger.info(f"load pretrained model from {args.pretrained_model}")
