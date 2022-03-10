@@ -11,8 +11,9 @@ The pre-request is BIO data must have offset information
 import shutil
 import traceback
 from pathlib import Path
+from collections import defaultdict
 
-from common_utils.common_io import load_bio_file_into_sents, read_from_file
+from common_utils.common_io import load_bio_file_into_sents, read_from_file, json_load, pkl_load, write_to_file
 
 BRAT_TEMPLATE = "{}\t{} {} {}\t{}"
 BIOC_TEMPLATE = """
@@ -40,12 +41,72 @@ BIOC_END = """
 """
 
 
-def biaffine2bio():
+def _print_info(predictions):
+    # predict first three predictions
+    i = 0
+    for each in predictions:
+        if each["entities"]:
+            i += 1
+            print(each)
+            print()
+        if i > 3:
+            break
+
+
+def biaffine2bio(raw_bio_file, biaffine_output_file, formatted_output_dir):
     raise NotImplementedError("biaffine output to BIO format not implemented.")
 
 
-def biaffine2brat():
-    raise NotImplementedError("biaffine output to brat format not implemented.")
+def biaffine2brat(raw_text_dir, biaffine_output_file, mapping_file, formatted_output_dir, do_copy):
+    p = Path(raw_text_dir)
+    p_output = Path(formatted_output_dir)
+    p_output.mkdir(exist_ok=True, parents=True)
+
+    predictions = json_load(biaffine_output_file)
+
+    _print_info(predictions)
+
+    mappings = pkl_load(mapping_file)
+
+    assert len(predictions) == len(mappings), f"expect same predictions and mappings but get " \
+                                              f"{len(predictions)} predictions and {len(mappings)} mappings"
+
+    nid = ""
+    ntext = ""
+    idx = 1
+    res_dict = defaultdict(list)
+
+    for pred, sent_map in zip(predictions, mappings):
+        ens = pred['entities']
+        for en in ens:
+            en_type = en[0]
+            s, e = en[1:3]
+            if s >= e:
+                continue
+
+            words = sent_map[s: e]
+            note_id = words[0][-1]
+
+            if nid != note_id:
+                nid = note_id
+                ntext = read_from_file(p/f"{nid}.txt")
+                idx = 1
+
+            org_s, org_e = words[0][1]
+            for w in words[1:]:
+                _, org_e = w[1]
+
+            en_text = ntext[org_s: org_e].replace("\n", " ")
+
+            res_dict[nid].append(BRAT_TEMPLATE.format(idx, en_type, org_s, org_e, en_text))
+            idx += 1
+
+    for fid, brats in res_dict.items():
+        write_to_file("\n".join(brats), p_output/f"{fid}.ann")
+
+    if do_copy:
+        for fn in p.glob("*.txt"):
+            shutil.copyfile(fn,  p_output/fn.name)
 
 
 def __prepare_path(text_dir, input_dir, output_dir):
