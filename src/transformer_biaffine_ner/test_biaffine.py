@@ -64,6 +64,7 @@ class Args:
         self.use_biaffine = True
         self.mlp_dim = 128
         self.mlp_layers = 0
+        self.mlp_hidden_dim = 0
         self.adversarial_training_method = None  # None, "fgm", "pgd"
 
 
