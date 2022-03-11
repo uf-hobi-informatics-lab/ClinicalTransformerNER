@@ -17,11 +17,12 @@ from common_utils.common_io import read_from_file, pkl_load, pkl_dump, json_load
 
 
 class InputFeature(object):
-    def __init__(self, input_tokens, input_ids, attention_masks, token_type_ids, labels, masks):
+    def __init__(self, input_tokens, input_ids, attention_masks, token_type_ids, token_sub_indexing, labels, masks):
         self.input_tokens = input_tokens
         self.input_ids = input_ids
         self.attention_masks = attention_masks
         self.token_type_ids = token_type_ids
+        self.token_sub_indexing = token_sub_indexing
         self.labels = labels
         self.masks = masks
 
@@ -94,22 +95,29 @@ def batch_to_model_inputs(batch, device=None):
 
 
 def convert_features_to_tensors(features):
+    print("convert features to tensors ...")
+
     tensor_input_ids = torch.tensor(
-        np.array([f.input_ids for f in tqdm.tqdm(features, desc="input ids")]), dtype=torch.long)
+        np.array([f.input_ids for f in features]), dtype=torch.long)
     tensor_attention_masks = torch.tensor(
-        np.array([f.attention_masks for f in tqdm.tqdm(features, desc="attention mask")]), dtype=torch.long)
+        np.array([f.attention_masks for f in features]), dtype=torch.long)
     tensor_token_type_ids = torch.tensor(
-        np.array([f.token_type_ids for f in tqdm.tqdm(features, desc="segment ids")]), dtype=torch.long)
+        np.array([f.token_type_ids for f in features]), dtype=torch.long)
+    tensor_sub_index_ids = torch.tensor(
+        np.array([f.token_sub_indexing for f in features]), dtype=torch.long)
     tensor_labels = torch.tensor(
-        np.array([f.labels for f in tqdm.tqdm(features, desc="labels")]), dtype=torch.long)
+        np.array([f.labels for f in features]), dtype=torch.long)
     tensor_masks = torch.tensor(
-        np.array([f.masks for f in tqdm.tqdm(features, desc="labels masks")]), dtype=torch.long)
+        np.array([f.masks for f in features]), dtype=torch.long)
+
+    print("convert features to tensors done.")
 
     return TensorDataset(tensor_input_ids,
                          tensor_attention_masks,
                          tensor_token_type_ids,
                          tensor_labels,
-                         tensor_masks)
+                         tensor_masks,
+                         tensor_sub_index_ids)
 
 
 class TransformerNerBiaffineDataProcessor(object):
@@ -199,7 +207,7 @@ class TransformerNerBiaffineDataProcessor(object):
 
         return data, unique_en_types
 
-    def _tokens2ids(self, tokens):
+    def _tokens2ids(self, tokens, token_sub_indexing):
         if self.tokenizer_type in {"bert", "distilbert", "electra", "deberta", "deberta-v2", "megatron"}:
             s_tk, e_tk, pad_tk = '[CLS]', '[SEP]', '[PAD]'
         elif self.tokenizer_type in {'roberta', 'longformer', 'bart'}:
@@ -213,13 +221,16 @@ class TransformerNerBiaffineDataProcessor(object):
 
         # single sequence: ``cls X X X sep pad ...``
         tokens.insert(0, s_tk)
+        token_sub_indexing.insert(0, 0)
         tokens.append(e_tk)
+        token_sub_indexing.append(0)
 
         attention_masks = [1] * len(tokens)
         cur_len = len(tokens)
 
         while cur_len < self.max_seq_len:
             tokens.append(pad_tk)
+            token_sub_indexing.append(0)
             attention_masks.append(0)
             cur_len += 1
 
@@ -229,7 +240,7 @@ class TransformerNerBiaffineDataProcessor(object):
         assert len(new_token_ids) + len(token_type_ids) + len(attention_masks) == self.max_seq_len * 3, \
             "check feature generation, ids are not the same size as max_seq_len, maybe max_seq_len is not enough."
 
-        return new_token_ids, attention_masks, token_type_ids
+        return new_token_ids, attention_masks, token_type_ids, token_sub_indexing
 
     def _update_labels(self, entities, mapping):
         new_entities = []
@@ -255,9 +266,6 @@ class TransformerNerBiaffineDataProcessor(object):
         masks = [attention_masks for _ in range(sum(attention_masks))]
         line_zeros = [0] * self.max_seq_len
         masks.extend([line_zeros for _ in range(len(masks), self.max_seq_len)])
-        # # call flattern, so we do not need to call masks.view(-1) in training
-        # # will slow down features2tensors so we just keep original dim
-        # masks = np.array(masks).flatten()
         masks = np.array(masks)
 
         return labels, masks
@@ -279,17 +287,21 @@ class TransformerNerBiaffineDataProcessor(object):
             tokens = example["tokens"]
             entities = example["entities"]
             new_tokens = []
+            token_sub_indexing = []
             for idx, tok in enumerate(tokens):
                 new_toks = self.tokenizer.tokenize(tok)
                 tok_remap[idx] = (len(new_tokens), len(new_tokens) + len(new_toks) - 1)
                 new_tokens.extend(new_toks)
+                token_sub_indexing.extend([(idx + 1)] * len(new_toks))
 
             if len(new_tokens) > (self.max_seq_len - 4):
                 warnings.warn(
                     f"example: {example}\nthe tokens are too many and will cause truncate which leads to error\n \
                     check preprocessing to make the sentences shorter.")
 
-            new_token_ids, attention_masks, token_type_ids = self._tokens2ids(new_tokens)
+            new_token_ids, attention_masks, token_type_ids, token_sub_indexing = self._tokens2ids(
+                new_tokens, token_sub_indexing)
+
             # Do we need to create labels and masks here? quite MEM intense; also take too much space to save cache
             # TODO: consider generating labels/masks using data collate_fn on fly
             # create 2D labels and masks based on token remapping and attention_masks
@@ -300,6 +312,7 @@ class TransformerNerBiaffineDataProcessor(object):
                                    input_ids=new_token_ids,
                                    attention_masks=attention_masks,
                                    token_type_ids=token_type_ids,
+                                   token_sub_indexing=token_sub_indexing,
                                    labels=labels,
                                    masks=masks
                                    )
@@ -339,7 +352,7 @@ class TransformerNerBiaffineDataProcessor(object):
         else:
             sampler = SequentialSampler(dataset)
 
-        # TODO: test multi num workers for data loader.  e.g., num_workers = 4
+        # we hard code the num_workers as 4; can be increased to 8 (4 is ok give 90% GPU utilization on avg)
         data_loader = DataLoader(dataset, sampler=sampler, batch_size=batch_size, pin_memory=True, num_workers=4)
 
         return data_loader

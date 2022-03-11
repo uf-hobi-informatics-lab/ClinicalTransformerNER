@@ -60,7 +60,14 @@ def run_task(args):
         args.config.vocab_size = len(args.tokenizer)
         args.config.mlp_dim = args.mlp_dim
         args.config.mlp_layers = args.mlp_layers
+        args.config.mlp_hidden_dim = args.mlp_hidden_dim
+        args.config.use_focal_loss = args.focal_loss
+        args.config.focal_loss_gamma = args.focal_loss_gamma
         args.logger.info(f"load pretrained model from {args.pretrained_model}")
+        if args.config.use_focal_loss:
+            args.logger.info(f"Using focal loss with gamma = {args.config.focal_loss_gamma}")
+        else:
+            args.logger.info(f"Using cross entropy loss")
 
         #############################################
         # also influence TransformerBiaffineNerModel AutoModel load
@@ -99,11 +106,12 @@ def run_task(args):
         args.logger.info(f"configuration for prediction:\n{args.config}")
 
         # predict_results format: [{"tokens": [xx ...], "entities": [(en, en_type, s, e) ...]}]
+        # note: we add 1 to the end position e so you can use e directly in list slice
         predicted_results = predict(args, test_data_loader)
 
         # we just output json formatted results
         # we let users to do reformat using run_format_biaffine_output.py
-        output_fn = args.predict_output_file if args.predict_output_file else Path(args.new_model_dir) / "predicts.json"
+        output_fn = args.predict_output_file if args.predict_output_file else Path(args.new_model_dir) / "predict.json"
         json_dump(predicted_results, output_fn)
 
 

@@ -109,11 +109,12 @@ python ./src/run_transformer_batch_prediction.py \
 ####
 # note: If you use do_format, then we have two outputs: 
 # 1) all bio outputs in output_dir; 
-# 2) 2) we create a formatted output dir (this dir's name is output_dir's name with a suffix of '_formatted_output') for the formatted # outputs (brat format if you set do_format=1). If you set --do_copy, we will copy the .txt files to the formatted output dir, otherwise we only put .ann files in the formatted output dir.
+# 2) 2) we create a formatted output dir (this directory's name is output_dir's name with a suffix of '_formatted_output') for the formatted # outputs (brat format if you set do_format=1). If you set --do_copy, we will copy the .txt files to the formatted output dir, otherwise we only put .ann files in the formatted output dir.
 ####
 ```
 
 ## Usage and example (biaffine approach)
+- implementation of https://aclanthology.org/2020.acl-main.577.pdf
 - see tutorial/convert_other_format_data_to_biaffine_format.ipynb for how to construct data from brat or bio format for biaffine model
 - training with biaffine, you just need to set the --use_biaffine flag
 - you can use any transformers as encoder, we use biaffine to decode
@@ -123,7 +124,7 @@ python ./src/run_transformer_batch_prediction.py \
 - you can use run_format_biaffine_output.py to convert format to BIO or brat
 - example
 ```shell
-# training and prediction (predict to BIO format)
+# training and prediction (predict to biaffine format)
 export CUDA_VISIBLE_DEVICES=0
 python src/run_transformer_ner.py \
       --use_biaffine \
@@ -140,10 +141,11 @@ python src/run_transformer_ner.py \
       --do_predict \
       --do_lower_case \
       --train_batch_size 4 \
-      --eval_batch_size 8 \
-      --train_steps 500 \
-      --learning_rate 1e-5 \
-      --num_train_epochs 1 \
+      --eval_batch_size 32 \
+      --train_steps 1000 \
+      --learning_rate 5e-5 \
+      --min_lr 5e-6 \
+      --num_train_epochs 50 \
       --gradient_accumulation_steps 1 \
       --do_warmup \
       --warmup_ratio 0.1 \
@@ -151,19 +153,41 @@ python src/run_transformer_ner.py \
       --max_num_checkpoints 1 \
       --log_file ./log.txt \
       --progress_bar \
-      --early_stop 3
+      --early_stop 5
+```
 
-# batch prediction (predict to brat format)
+- reformat output to brat and do evaluation
+```shell
+# to BIO format
+python run_format_biaffine_output.py \
+  --raw_input_dir_or_file <where the test BIO data located> \
+  --biaffine_output_file <where is the biaffine output json file> \
+  --formatted_output_dir <where is the formatted output, we will create a predict.txt under this folder>
+
+# BIO evaluation
+python eval_scripts/new_bio_eval.py -f1 ./test_data/conll-2003/test.txt -f2 <formatted output file>
+
+# To Brat format
+python run_format_biaffine_output.py \
+  --raw_input_dir_or_file <where the test BIO data located> \
+  --biaffine_output_file <where is the biaffine output json file> \
+  --mapping_file <a pickle file generated based on test data for mapping file id and offsets> \
+  --do_copy_raw_text True \
+  --formatted_output_dir <where is the formatted output, we create all .ann under this folder>
+  
+# brat evaluation
+python eval_scripts/brat_eval.py --f1 <gold standard ann files dir> --f2 <formatted output dir>
 ```
 
 ## Tutorial
 > we have tutorials in the tutorial directory
 - brat2bio.ipynb is an example on how to write code to covert brat format annotation to BIO format which used for training and test 
 - pipeline_preprocessing_training_prediction.ipynb is a full pipeline example from data preprocessing to training to prediction to evaluation
+- convert_other_format_data_to_biaffine_format.ipynb is for how to generate data for biaffine model from other formats (BIO, BRAT)
 - note: in full pipeline example, we used our NLPreprocessing package which is customized for clinical notes but may have issues if the notes have some unique format in it.
 
 ## Wiki for all parameters
-[wiki](https://github.com/uf-hobi-informatics-lab/ClinicalTransformerNER/wiki/Parameters)
+[wiki link to description of all arguments](https://github.com/uf-hobi-informatics-lab/ClinicalTransformerNER/wiki/Parameters)
 
 ## Organization
 - Department of Health Outcomes and Biomedical Informatics, College of Medicine, University of Florida

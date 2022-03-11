@@ -104,10 +104,13 @@ def main():
     parser.add_argument("--use_biaffine", action='store_true',
                         help="Whether to use biaffine for NER (https://www.aclweb.org/anthology/2020.acl-main.577/).")
     parser.add_argument("--mlp_dim", default=128, type=int,
-                        help="The dimension for MLP layer in biaffine module, default to 128."
+                        help="The output dimension for MLP layer in biaffine module, default to 128."
                              "If set this value <= 0, we use transformer model hidden layer dimension")
     parser.add_argument("--mlp_layers", default=0, type=int,
-                        help="The number of layers in MLP in biaffine module, default to 0 (1 linear layer).")
+                        help="The number of layers in MLP in biaffine module, default to 0 (1 linear layer)."
+                             "if set to 1, then NLP will have three linear layers")
+    parser.add_argument("--mlp_hidden_dim", default=0, type=int,
+                        help="The hidden dim of MLP layers in biaffine module, default to 0 (no use hidden layer)")
     # adversarial training method: pgd, fgm
     parser.add_argument("--adversarial_training_method", default=None,
                         help="what method to use for adversarial training, support pgd and fgm; "
