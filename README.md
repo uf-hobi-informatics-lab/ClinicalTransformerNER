@@ -158,18 +158,25 @@ python src/run_transformer_ner.py \
 
 - reformat output to brat and do evaluation
 ```shell
-# to BIO format; we also support to brat format
+# to BIO format
 python run_format_biaffine_output.py \
-  --raw_input_file <where the test data located> \
+  --raw_input_dir_or_file <where the test BIO data located> \
   --biaffine_output_file <where is the biaffine output json file> \
+  --formatted_output_dir <where is the formatted output, we will create a predict.txt under this folder>
 
 # BIO evaluation
-python eval_scripts/new_bio_eval.py --f1 ./test_data/conll-2003/test.txt --f2 <formatted output file>
-```
+python eval_scripts/new_bio_eval.py -f1 ./test_data/conll-2003/test.txt -f2 <formatted output file>
 
-- batch prediction (predict to brat format)
-```shell
-
+# To Brat format
+python run_format_biaffine_output.py \
+  --raw_input_dir_or_file <where the test BIO data located> \
+  --biaffine_output_file <where is the biaffine output json file> \
+  --mapping_file <a pickle file generated based on test data for mapping file id and offsets> \
+  --do_copy_raw_text True \
+  --formatted_output_dir <where is the formatted output, we create all .ann under this folder>
+  
+# brat evaluation
+python eval_scripts/brat_eval.py --f1 <gold standard ann files dir> --f2 <formatted output dir>
 ```
 
 ## Tutorial

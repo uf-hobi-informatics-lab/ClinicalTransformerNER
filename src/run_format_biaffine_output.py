@@ -37,7 +37,7 @@ if __name__ == '__main__':
                         help="The final output data directory.")
     parser.add_argument("--do_format", type=str, default="bio",
                         help="bio or brat")
-    parser.add_argument("--do_copy_raw_text", type=str, default=False,
+    parser.add_argument("--do_copy_raw_text", type=bool, default=False,
                         help="copy raw text to output; only required for brat")
     global_args = parser.parse_args()
 
