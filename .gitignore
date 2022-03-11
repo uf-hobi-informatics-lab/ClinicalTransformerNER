@@ -8,3 +8,4 @@ new_ner_model
 /.ipynb_checkpoints/
 /test/
 /test_data/biaffine_conll2003_mini/
+/src/transformer_w2ner/data/
