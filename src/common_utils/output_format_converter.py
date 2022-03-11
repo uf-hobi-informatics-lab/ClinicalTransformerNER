@@ -54,7 +54,43 @@ def _print_info(predictions):
 
 
 def biaffine2bio(raw_bio_file, biaffine_output_file, formatted_output_dir):
-    raise NotImplementedError("biaffine output to BIO format not implemented.")
+    p_output = Path(formatted_output_dir)
+    p_output.mkdir(exist_ok=True, parents=True)
+    output_fn = p_output / "predicted_bio.txt"
+
+    sents = load_bio_file_into_sents(raw_bio_file)
+    nsents = []
+    for sent in sents:
+        nsent = []
+        for word in sent:
+            nsent.append(word[0])
+        nsents.append(nsent)
+
+    predictions = json_load(biaffine_output_file)
+    _print_info(predictions)
+
+    assert len(predictions) == len(nsents), f"expect same predictions and mappings but get " \
+                                              f"{len(predictions)} predictions and {len(nsents)} mappings"
+
+    labeled_sents = []
+    for pred, sent in zip(predictions, nsents):
+        ens = pred['entities']
+        labels = ["O"] * len(sent)
+        for en in ens:
+            en_type = en[0]
+            s, e = en[1:3]
+            if s >= e:
+                continue
+
+            for i in range(s, e):
+                if (i - s) == 0:
+                    labels[i] = "B-" + en_type
+                else:
+                    labels[i] = "I-" + en_type
+
+        labeled_sents.append("\n".join([f"{w} {l}" for w, l in zip(sent, labels)]))
+
+    write_to_file("\n\n".join(labeled_sents), output_fn)
 
 
 def biaffine2brat(raw_text_dir, biaffine_output_file, mapping_file, formatted_output_dir, do_copy):
@@ -63,7 +99,6 @@ def biaffine2brat(raw_text_dir, biaffine_output_file, mapping_file, formatted_ou
     p_output.mkdir(exist_ok=True, parents=True)
 
     predictions = json_load(biaffine_output_file)
-
     _print_info(predictions)
 
     mappings = pkl_load(mapping_file)
