@@ -159,6 +159,8 @@ class TransformerBiaffineNerModel(nn.Module):
         else:
             self.lm = AutoModel.from_config(config=config)
 
+        self.resize_token_embeddings(config.vocab_size)
+
         self.biaffine = BiaffineLayer(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
