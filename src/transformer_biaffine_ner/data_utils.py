@@ -30,6 +30,17 @@ class InputFeature(object):
         return str(self.__dict__)
 
 
+class NumpyDataset(torch.utils.data.Dataset):
+    def __init__(self, *numpy_arrays):
+        self.arrays = numpy_arrays
+
+    def __getitem__(self, index):
+        return [array[index] for array in self.arrays]
+
+    def __len__(self):
+        return self.arrays[0].shape[0]
+
+
 def batch_to_model_inputs(batch, device=None):
     if device:
         inputs = {'input_ids': batch[0].to(device),
@@ -44,54 +55,6 @@ def batch_to_model_inputs(batch, device=None):
                   'labels': batch[3],
                   'masks': batch[4]}
     return inputs
-
-
-####################### multiprocessing feature to tensor process #######################
-# def _f2t(features, return_dict, dtype):
-#     try:
-#         if dtype == "input":
-#             return_dict[dtype] = torch.tensor([f.input_ids for f in features], dtype=torch.long)
-#         elif dtype == "att_mask":
-#             return_dict[dtype] = torch.tensor([f.attention_masks for f in features], dtype=torch.long)
-#         elif dtype == "segment":
-#             return_dict[dtype] = torch.tensor([f.token_type_ids for f in features], dtype=torch.long)
-#         elif dtype == "labels":
-#             return_dict[dtype] = torch.tensor([f.labels for f in features], dtype=torch.long)
-#         elif dtype == "masks":
-#             return_dict[dtype] = torch.tensor([f.masks for f in features], dtype=torch.long)
-#     except Exception as ex:
-#         traceback.print_exc()
-
-
-# def convert_features_to_tensors(features):
-#     manager = multiprocessing.Manager()
-#     return_dict = manager.dict()
-
-#     p1 = multiprocessing.Process(target=_f2t, args=(features, return_dict, "input"))
-#     p2 = multiprocessing.Process(target=_f2t, args=(features, return_dict, "att_mask"))
-#     p3 = multiprocessing.Process(target=_f2t, args=(features, return_dict, "segment"))
-#     p4 = multiprocessing.Process(target=_f2t, args=(features, return_dict, "labels"))
-#     p5 = multiprocessing.Process(target=_f2t, args=(features, return_dict, "masks"))
-#     jobs = [p1, p2, p3, p4, p5]
-
-#     for proc in jobs:
-#         proc.start()
-
-#     for proc in jobs:
-#         proc.join()
-
-#     tensor_input_ids = return_dict["input"]
-#     tensor_attention_masks = return_dict["att_mask"]
-#     tensor_token_type_ids = return_dict["segment"]
-#     tensor_labels = return_dict["labels"]
-#     tensor_masks = return_dict["masks"]
-
-#     return TensorDataset(tensor_input_ids,
-#                          tensor_attention_masks,
-#                          tensor_token_type_ids,
-#                          tensor_labels,
-#                          tensor_masks)
-####################### multiprocessing feature to tensor process #######################
 
 
 def convert_features_to_tensors(features):
@@ -118,6 +81,53 @@ def convert_features_to_tensors(features):
                          tensor_labels,
                          tensor_masks,
                          tensor_sub_index_ids)
+
+
+def get_numpy_dataset(features):
+    print("convert features to numpy arrays ...")
+    input_ids = np.array([f.input_ids for f in features])
+    attention_masks = np.array([f.attention_masks for f in features])
+    token_type_ids = np.array([f.token_type_ids for f in features])
+    token_sub_indexing = np.array([f.token_sub_indexing for f in features])
+
+    labels = []
+    for f in features:
+        label = np.zeros((f.input_ids.shape[0], f.input_ids.shape[0]), dtype=int)
+        entities = f.labels
+        for en in entities:
+            s, e = en[1]
+            label[s, e] = en[0]
+        labels.append(label)
+
+    labels = np.array(labels, dtype=int)
+
+    return NumpyDataset(input_ids, attention_masks, token_type_ids, token_sub_indexing, labels)
+
+
+def save_mem_collate_fn(data):
+    input_ids = np.array([e[0] for e in data])
+    attention_masks = np.array([e[1] for e in data])
+    input_token_type_ids = np.array([e[2] for e in data])
+    token_sub_indexing = np.array([e[3] for e in data])
+    labels = np.array([e[4] for e in data])
+
+    # create labels mask
+    max_seq_len = input_ids[0].shape[0]
+
+    label_masks = []
+    for attention_mask in attention_masks:
+        masks = [attention_mask for _ in range(sum(attention_mask))]
+        line_zeros = [0] * max_seq_len
+        masks.extend([line_zeros for _ in range(len(masks), max_seq_len)])
+        label_masks.append(masks)
+    label_masks = np.array(label_masks)
+
+    return torch.tensor(input_ids, dtype=torch.long), \
+           torch.tensor(attention_masks, dtype=torch.long), \
+           torch.tensor(input_token_type_ids, dtype=torch.long), \
+           torch.tensor(token_sub_indexing, dtype=torch.long), \
+           torch.tensor(labels, dtype=torch.long), \
+           torch.tensor(label_masks, dtype=torch.long)
 
 
 class TransformerNerBiaffineDataProcessor(object):
@@ -244,23 +254,22 @@ class TransformerNerBiaffineDataProcessor(object):
 
     def _update_labels(self, entities, mapping):
         new_entities = []
-        self.logger.debug("remapping the indexes of entities after tokenization...")
         for en in entities:
             text, ty, s_e = en[:3]
+            label_id = self.label2idx[ty]
             s, e = s_e
             # we need to add 1 because [CLS] insertion
             new_s = mapping[s][0] + 1
             new_e = mapping[e][-1] + 1
-            new_entities.append([ty, (new_s, new_e)])
+            new_entities.append([label_id, (new_s, new_e)])
         return new_entities
 
     def _create_labels_and_masks(self, entities, attention_masks):
         # labels dim = max_seq_len * max_seq_len
         labels = np.zeros((self.max_seq_len, self.max_seq_len), dtype=int)
         for en in entities:
-            label_id = self.label2idx[en[0]]
             s, e = en[1]
-            labels[s, e] = label_id
+            labels[s, e] = en[0]
 
         # masks dim = max_seq_len * max_seq_len
         masks = [attention_masks for _ in range(sum(attention_masks))]
@@ -270,17 +279,17 @@ class TransformerNerBiaffineDataProcessor(object):
 
         return labels, masks
 
-    def data2feature_parallel(self, examples, task="test"):
+    def data2feature_parallel(self, examples, task="test", save_mem=False):
         from concurrent.futures import ProcessPoolExecutor
         features = []
         batch_examples = np.array_split(examples, 8)
         with ProcessPoolExecutor(max_workers=8) as pool:
-            for batch_features in pool.map(partial(self.data2feature, task=task), batch_examples):
+            for batch_features in pool.map(partial(self.data2feature, task=task, save_mem=save_mem), batch_examples):
                 features.extend(batch_features)
 
         return features
 
-    def data2feature(self, examples, task="test"):
+    def data2feature(self, examples, task="test", save_mem=False):
         features = []
         for example in tqdm.tqdm(examples, desc="examples2features"):
             tok_remap = dict()
@@ -306,7 +315,11 @@ class TransformerNerBiaffineDataProcessor(object):
             # TODO: consider generating labels/masks using data collate_fn on fly
             # create 2D labels and masks based on token remapping and attention_masks
             new_entities = self._update_labels(entities, tok_remap)
-            labels, masks = self._create_labels_and_masks(new_entities, attention_masks)
+
+            if save_mem:
+                labels, masks = new_entities, None
+            else:
+                labels, masks = self._create_labels_and_masks(new_entities, attention_masks)
 
             feature = InputFeature(input_tokens=" ".join(new_tokens),
                                    input_ids=new_token_ids,
@@ -316,11 +329,12 @@ class TransformerNerBiaffineDataProcessor(object):
                                    labels=labels,
                                    masks=masks
                                    )
+
             features.append(feature)
 
         return features
 
-    def _data_loader(self, task="train", batch_size=4, to_tensor=True):
+    def _data_loader(self, task="train", batch_size=4, to_tensor=True, save_mem=False):
         # process data to features
         if task == "train":
             data, _ = self.get_train_examples()
@@ -338,33 +352,50 @@ class TransformerNerBiaffineDataProcessor(object):
         else:
             # dataset = self.data2feature(data, task)
             # #use parallel with 8 cores
-            dataset = self.data2feature_parallel(data, task)
+            dataset = self.data2feature_parallel(data, task=task, save_mem=save_mem)
         if self.cache and not fn.exists():
             self.logger.info(f"set cache to True so it will save {task} data at {fn}")
             pkl_dump(dataset, fn)
 
         # task can be train, dev, test
-        if to_tensor:
+        if to_tensor and not save_mem:
             dataset = convert_features_to_tensors(dataset)
+
+        if save_mem:
+            dataset = get_numpy_dataset(dataset)
 
         if task == "train":
             sampler = RandomSampler(dataset)
         else:
             sampler = SequentialSampler(dataset)
 
-        # we hard code the num_workers as 4; can be increased to 8 (4 is ok give 90% GPU utilization on avg)
-        data_loader = DataLoader(dataset, sampler=sampler, batch_size=batch_size, pin_memory=True, num_workers=4)
+        # we hard code the num_workers as 8
+        if save_mem:
+            data_loader = DataLoader(
+                dataset,
+                sampler=sampler,
+                batch_size=batch_size,
+                pin_memory=True,
+                collate_fn=save_mem_collate_fn,
+                num_workers=8)
+        else:
+            data_loader = DataLoader(
+                dataset,
+                sampler=sampler,
+                batch_size=batch_size,
+                pin_memory=True,
+                num_workers=8)
 
         return data_loader
 
     def get_train_data_loader(self, batch_size=4):
-        return self._data_loader(task="train", batch_size=batch_size)
+        return self._data_loader(task="train", batch_size=batch_size, save_mem=False)
 
-    def get_test_data_loader(self, batch_size=4, to_tensor=True):
-        return self._data_loader(task="test", batch_size=batch_size)
+    def get_test_data_loader(self, batch_size=4):
+        return self._data_loader(task="test", batch_size=batch_size, save_mem=False)
 
-    def get_dev_data_loader(self, batch_size=4, to_tensor=True):
-        return self._data_loader(task="dev", batch_size=batch_size)
+    def get_dev_data_loader(self, batch_size=4):
+        return self._data_loader(task="dev", batch_size=batch_size, save_mem=False)
 
 
 if __name__ == "__main__":

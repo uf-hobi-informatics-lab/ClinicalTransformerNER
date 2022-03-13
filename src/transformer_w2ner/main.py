@@ -77,7 +77,7 @@ class Trainer(object):
 
         p, r, f1, _ = precision_recall_fscore_support(label_result.cpu().numpy(),
                                                       pred_result.cpu().numpy(),
-                                                      average="macro")
+                                                      average="micro")
 
         table = pt.PrettyTable(["Train {}".format(epoch), "Loss", "F1", "Precision", "Recall"])
         table.add_row(["Label", "{:.4f}".format(np.mean(loss_list))] +
@@ -123,7 +123,7 @@ class Trainer(object):
 
         p, r, f1, _ = precision_recall_fscore_support(label_result.cpu().numpy(),
                                                       pred_result.cpu().numpy(),
-                                                      average="macro")
+                                                      average="micro")
         e_f1, e_p, e_r = utils.cal_f1(total_ent_c, total_ent_p, total_ent_r)
 
         title = "EVAL" if not is_test else "TEST"

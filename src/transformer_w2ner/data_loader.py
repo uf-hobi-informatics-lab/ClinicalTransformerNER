@@ -1,17 +1,18 @@
 import json
-import torch
-from torch.utils.data import Dataset
-from torch.nn.utils.rnn import pad_sequence
+import os
+
 import numpy as np
 import prettytable as pt
-from gensim.models import KeyedVectors
+import torch
+from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import Dataset
 from transformers import AutoTokenizer
-import os
+
 import utils
-import requests
+
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-dis2idx = np.zeros((1000), dtype='int64')
+dis2idx = np.zeros(1000, dtype='int64')
 dis2idx[1] = 1
 dis2idx[2:] = 2
 dis2idx[4:] = 3
@@ -29,6 +30,7 @@ class Vocabulary(object):
     SUC = '<suc>'
 
     def __init__(self):
+        self.token2id = None
         self.label2id = {self.PAD: 0, self.SUC: 1}
         self.id2label = {0: self.PAD, 1: self.SUC}
 
@@ -46,6 +48,7 @@ class Vocabulary(object):
     def label_to_id(self, label):
         label = label.lower()
         return self.label2id[label]
+
 
 def collate_fn(data):
     bert_inputs, grid_labels, grid_mask2d, pieces2word, dist_inputs, sent_length, entity_text = map(list, zip(*data))

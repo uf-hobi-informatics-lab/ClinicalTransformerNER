@@ -111,20 +111,6 @@ def _evaluate(args, prev_best_score, model, new_model_dir, global_step, data_loa
     return new_best_score, f1, precision, recall, loss
 
 
-# def _get_decode_mapping(tok_ids, cur_index, query_word, tokenizer=None):
-#     while cur_index < len(tok_ids):
-#         j = cur_index + 1
-#         while j <= len(tok_ids):
-#             en = tokenizer.decode(tok_ids[cur_index: j], clean_up_tokenization_spaces=False).strip()
-#             if en == query_word:
-#                 return cur_index, j
-#             j += 1
-#         cur_index += 1
-#
-#     raise RuntimeError(f"Cannot map indexes for {query_word} in"
-#                        f"\n{tokenizer.decode(tok_ids, skip_special_tokens=True).strip().split()}")
-
-
 def _decode_index_mapping(map_table, s, e):
     new_s = None
     new_e = None

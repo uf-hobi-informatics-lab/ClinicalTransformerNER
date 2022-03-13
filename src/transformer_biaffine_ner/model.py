@@ -83,29 +83,44 @@ class _Biaffine(nn.Module):
         self.by = bias_y
         self.output_dim = output_dim
 
-        linear_input_dim = input_dim + int(bias_x)
-        new_output_dim = input_dim + int(bias_y)
-        linear_output_dim = output_dim * new_output_dim
-        self.linear = nn.Linear(linear_input_dim, linear_output_dim)
+        linear_input_dim1 = input_dim + int(bias_x)
+        linear_input_dim2 = input_dim + int(bias_y)
+
+        self.bilinear_map = nn.Parameter(
+            torch.Tensor(linear_input_dim1, output_dim, linear_input_dim2))
 
     def forward(self, x, y):
         assert x.shape == y.shape
-        bz, seq_len, _ = x.shape
+        bz, seq_len, hdim = x.shape
 
         if self.bx:
             x = torch.cat([x, torch.ones_like(x[..., :1])], dim=-1)
         if self.by:
             y = torch.cat([y, torch.ones_like(y[..., :1])], dim=-1)
 
-        affine = self.linear(x)
-        affine = torch.reshape(affine, (bz, seq_len*self.output_dim, -1))
-        biaffine = torch.matmul(affine, torch.permute(y, (0, 2, 1)))
-        biaffine = torch.permute(biaffine, (0, 2, 1))
-        biaffine = torch.reshape(biaffine, (bz, seq_len, seq_len, -1))
-        # squeeze last dim if 1
-        biaffine = torch.squeeze(biaffine, dim=-1)
+        # bilinear map [v o v] => [v, o*v]
+        self.bilinear_map = torch.reshape(self.bilinear_map, (hdim, -1))
 
-        return biaffine
+        # x [b,s,v] => [b*s, v]
+        x = torch.reshape(x, (-1, hdim))
+
+        # [b*s,v] * [v, o*v] => [b*s, o*v]
+        self.bilinear_map = torch.bmm(x, self.bilinear_map)
+
+        # y [b, s, v]T =>[b, v, s]
+        y = torch.permute(y, (0, 2, 1))
+
+        # [b*s, o*v] => [b, s*o, v]
+        self.bilinear_map = torch.reshape(self.bilinear_map, (bz, -1, hdim))
+
+        # [b, s*o, v] * [b, v, s] => [b, s*o, s]
+        self.bilinear_map = torch.matmul(self.bilinear_map, y)
+
+        # [b, s*o, s] = > [b, s, s, o]
+        self.bilinear_map = torch.reshape(self.bilinear_map, (bz, seq_len, -1, seq_len))
+        bilinear_map = torch.permute( self.bilinear_map, (0, 1, 3, 2))
+
+        return bilinear_map
 
 
 class BiaffineLayer(nn.Module):
