@@ -2,9 +2,9 @@ import json
 
 
 class Config:
-    def __init__(self, args):
-        with open(args.config, "r", encoding="utf-8") as f:
-            config = json.load(f)
+    def __init__(self, args, config):
+        # with open(args.config, "r", encoding="utf-8") as f:
+        #     config = json.load(f)
 
         self.dataset = config["dataset"]
 

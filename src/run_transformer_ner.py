@@ -111,6 +111,10 @@ def main():
                              "if set to 1, then NLP will have three linear layers")
     parser.add_argument("--mlp_hidden_dim", default=0, type=int,
                         help="The hidden dim of MLP layers in biaffine module, default to 0 (no use hidden layer)")
+    parser.add_argument("--use_w2", action='store_true',
+                       help="Whether to use w2ner for NER (https://arxiv.org/pdf/2112.10070.pdf).")
+    parser.add_argument("--w2ner_config", type=str, default=None,
+                        help="config file for w2ner, only used when --use_w2 is set")
     # adversarial training method: pgd, fgm
     parser.add_argument("--adversarial_training_method", default=None,
                         help="what method to use for adversarial training, support pgd and fgm; "
@@ -165,6 +169,9 @@ def main():
     try:
         if global_args.use_biaffine:
             run_biaffine_task(global_args)
+        if global_args.use_w2:
+            raise NotImplementedError("TODO: we will integrate w2ner into the repo soon.")
+            # run_w2ner_task(global_args)
         else:
             run_task(global_args)
     except Exception as ex:

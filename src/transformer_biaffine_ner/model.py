@@ -200,3 +200,62 @@ class TransformerBiaffineNerModel(nn.Module):
 
         logits, loss = self.biaffine(tokens_representations, labels, masks)
         return logits, loss
+
+
+class TransformerLSTMBiaffineNerModel(nn.Module):
+    """
+        different from TransformerBiaffineNerModel
+        we add a bi-lstm layer in between bert and biaffine layer
+    """
+    def __init__(self, config):
+        super().__init__()
+        if config.init_in_training:
+            self.lm = AutoModel.from_pretrained(config.base_model_path, config=config)
+        else:
+            self.lm = AutoModel.from_config(config=config)
+
+        self.resize_token_embeddings(config.vocab_size)
+
+        mlp_input_dim = config.lstm_hidden_size
+        mlp_output_dim = config.mlp_dim if config.mlp_dim > 0 else mlp_input_dim
+        mlp_hidden_dim = config.mlp_hidden_dim
+
+        self.ffnns = MLP(mlp_input_dim, mlp_output_dim, mlp_hidden_dim, config.mlp_layers)
+        self.ffnne = MLP(mlp_input_dim, mlp_output_dim, mlp_hidden_dim, config.mlp_layers)
+
+        self.biaffine = _Biaffine(input_dim=mlp_output_dim, output_dim=config.num_labels)
+
+        self.lstm = nn.LSTM(input_size=config.hidden_size,
+                            hidden_size=config.lstm_hidden_size,
+                            batch_first=True,
+                            bidirectional=True,
+                            dropout=config.hidden_dropout_prob)
+
+    def resize_token_embeddings(self, new_size):
+        self.lm.resize_token_embeddings(new_size)
+
+    def forward(self,
+                input_ids=None,
+                attention_mask=None,
+                token_type_ids=None,
+                position_ids=None,
+                labels=None,
+                masks=None):
+        # obtain representations from pretrained language model
+        lm_representatons = self.lm(input_ids,
+                                    attention_mask=attention_mask,
+                                    token_type_ids=token_type_ids,
+                                    position_ids=position_ids)
+        # here we only get the last layers; can get last two layers and do avg
+        tokens_representations = lm_representatons[0]
+
+        rep, (_, _) = self.lstm(tokens_representations)
+
+        head = self.ffnns(rep)
+        tail = self.ffnne(rep)
+
+        biaffine_rep = self.biaffine(head, tail)
+
+        logits, loss = self.biaffine(biaffine_rep, labels, masks)
+
+        return logits, loss
