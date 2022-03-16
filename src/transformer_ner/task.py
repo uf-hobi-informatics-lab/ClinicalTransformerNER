@@ -212,14 +212,24 @@ def train(args, model, train_features, dev_features):
     t_total = len(data_loader) // args.gradient_accumulation_steps * args.num_train_epochs
 
     # parameters for optimization
-    # ['crf_layer.end_transitions', 'crf_layer.start_transitions', 'crf_layer.transitions',
-    # 'classifier.weight', 'classifier.bias']
+    cls = ['classifier.weight']
     no_decay = ['bias', 'LayerNorm.weight']
+    crfs = ['crf_layer.end_transitions', 'crf_layer.start_transitions', 'crf_layer.transitions']
+    # this is empirical (magic) number, you need to change the scalers for different datasets
+    learning_rate_scaler_crf = 1
+    learning_rate_scaler_cls = 1
+
     optimizer_grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in (no_decay + crfs + cls))],
          'weight_decay': args.weight_decay},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
+         'weight_decay': 0.0},
+        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in crfs)],
+         'lr': args.learning_rate * learning_rate_scaler_crf, 'weight_decay': args.weight_decay},
+        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in cls)],
+         'lr': args.learning_rate * learning_rate_scaler_cls, 'weight_decay': args.weight_decay}
     ]
+
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
 
     # using fp16 for training rely on Nvidia apex package
@@ -319,27 +329,29 @@ def train(args, model, train_features, dev_features):
             # using training step
             if args.train_steps > 0 and (global_step + 1) % args.train_steps == 0 and epoch > 0:
                 # the current implementation will skip the all evaluations in the first epoch
-                best_score, eval_loss = evaluate(
+                best_score, eval_loss, cur_score = evaluate(
                     args, model, new_model_dir, dev_features, epoch, global_step, best_score)
                 args.logger.info("""
                 Global step: {}; 
                 Epoch: {}; 
                 average_train_loss: {:.4f}; 
-                eval_loss: {:.4f}; 
+                eval_loss: {:.4f};
+                current score: {:.4f};
                 current best score: {:.4f}""".format(
-                    global_step, epoch + 1, round(tr_loss / global_step, 4), eval_loss, best_score))
+                    global_step, epoch + 1, round(tr_loss / global_step, 4), eval_loss, cur_score, best_score))
 
         # default model select method using strict F1-score with beta=1; evaluate model after each epoch on dev
         if args.train_steps <= 0 or epoch == 0:
-            best_score, eval_loss = evaluate(
+            best_score, eval_loss, cur_score = evaluate(
                 args, model, new_model_dir, dev_features, epoch, global_step, best_score)
             args.logger.info("""
                 Global step: {}; 
                 Epoch: {}; 
                 average_train_loss: {:.4f}; 
-                eval_loss: {:.4f}; 
+                eval_loss: {:.4f};
+                current score: {:.4f}; 
                 current best score: {:.4f}""".format(
-                global_step, epoch + 1, round(tr_loss / global_step, 4), eval_loss, best_score))
+                global_step, epoch + 1, round(tr_loss / global_step, 4), eval_loss, cur_score, best_score))
 
         # early stop check
         if epcoh_best_score < best_score:
@@ -458,7 +470,7 @@ def evaluate(args, model, new_model_dir, features, epoch, global_step, best_scor
         if args.save_model_core:
             save_only_transformer_core(args, model)
 
-    return best_score, eval_loss
+    return best_score, eval_loss, cur_score
 
 
 def __fix_bio(bios):

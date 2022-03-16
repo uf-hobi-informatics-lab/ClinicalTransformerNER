@@ -42,7 +42,7 @@ class Args:
         self.idx2label = None
         self.max_num_checkpoints = 1
         self.warmup_ratio = 0.1
-        self.weight_decay = 0.0
+        self.weight_decay = 0.01
         self.adam_epsilon = 0.00000001
         self.max_grad_norm = 1.0
         self.log_file = None
