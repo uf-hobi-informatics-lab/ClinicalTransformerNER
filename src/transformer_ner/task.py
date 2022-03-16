@@ -44,8 +44,7 @@ from transformer_ner.model import (AlbertNerModel, BartNerModel,
                                    BertNerModel, XLNetNerModel,
                                    DeBertaNerModel, DistilBertNerModel,
                                    ElectraNerModel, LongformerNerModel,
-                                   RobertaNerModel, Transformer_CRF,
-                                   DeBertaV2NerModel, MegatronNerModel)
+                                   RobertaNerModel, DeBertaV2NerModel, MegatronNerModel)
 from transformer_ner.model_utils import PGD, FGM, get_linear_schedule_with_warmup
 
 
@@ -213,6 +212,8 @@ def train(args, model, train_features, dev_features):
     t_total = len(data_loader) // args.gradient_accumulation_steps * args.num_train_epochs
 
     # parameters for optimization
+    # ['crf_layer.end_transitions', 'crf_layer.start_transitions', 'crf_layer.transitions',
+    # 'classifier.weight', 'classifier.bias']
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],

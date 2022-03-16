@@ -26,7 +26,7 @@ from transformers import (ALBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
                           MegatronBertPreTrainedModel, MegatronBertModel, MegatronBertPreTrainedModel)
 
 from transformer_ner.model_utils import FocalLoss, _calculate_loss
-from transformer_ner.model_utils import New_Transformer_CRF as Transformer_CRF
+from transformer_ner.model_utils import init_crf
 
 
 class BertNerModel(BertPreTrainedModel):
@@ -50,8 +50,7 @@ class BertNerModel(BertPreTrainedModel):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
+        self.use_crf, self.crf_layer = init_crf(config)
 
         self.init_weights()
 
@@ -69,9 +68,10 @@ class BertNerModel(BertPreTrainedModel):
 
         if self.use_crf:
             # logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            mask = attention_mask.detach().clone().type(torch.bool)
             loss = self.crf_layer(emissions=logits,
                                   tags=label_ids,
-                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+                                  mask=mask)
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
@@ -97,8 +97,7 @@ class RobertaNerModel(BertPreTrainedModel):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
+        self.use_crf, self.crf_layer = init_crf(config)
 
         self.init_weights()
 
@@ -128,9 +127,10 @@ class RobertaNerModel(BertPreTrainedModel):
 
         if self.use_crf:
             # logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            mask = attention_mask.detach().clone().type(torch.bool)
             loss = self.crf_layer(emissions=logits,
                                   tags=label_ids,
-                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+                                  mask=mask)
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
@@ -153,8 +153,7 @@ class LongformerNerModel(LongformerForTokenClassification):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
+        self.use_crf, self.crf_layer = init_crf(config)
 
         self.init_weights()
 
@@ -183,9 +182,10 @@ class LongformerNerModel(LongformerForTokenClassification):
 
         if self.use_crf:
             # logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            mask = attention_mask.detach().clone().type(torch.bool)
             loss = self.crf_layer(emissions=logits,
                                   tags=label_ids,
-                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+                                  mask=mask)
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
@@ -211,8 +211,7 @@ class AlbertNerModel(AlbertPreTrainedModel):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
+        self.use_crf, self.crf_layer = init_crf(config)
 
         self.init_weights()
 
@@ -230,9 +229,10 @@ class AlbertNerModel(AlbertPreTrainedModel):
 
         if self.use_crf:
             # logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            mask = attention_mask.detach().clone().type(torch.bool)
             loss = self.crf_layer(emissions=logits,
                                   tags=label_ids,
-                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+                                  mask=mask)
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
@@ -258,8 +258,7 @@ class DistilBertNerModel(BertPreTrainedModel):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
+        self.use_crf, self.crf_layer = init_crf(config)
 
         self.init_weights()
 
@@ -281,9 +280,10 @@ class DistilBertNerModel(BertPreTrainedModel):
 
         if self.use_crf:
             # logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            mask = attention_mask.detach().clone().type(torch.bool)
             loss = self.crf_layer(emissions=logits,
                                   tags=label_ids,
-                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+                                  mask=mask)
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
@@ -371,10 +371,10 @@ class BartNerModel(PreTrainedModel):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
+        self.use_crf, self.crf_layer = init_crf(config)
 
         self.output_concat = output_concat
+
         self.init_weights()
 
     def _init_weights(self, module):
@@ -409,9 +409,10 @@ class BartNerModel(PreTrainedModel):
 
         if self.use_crf:
             # logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            mask = attention_mask.detach().clone().type(torch.bool)
             loss = self.crf_layer(emissions=logits,
                                   tags=label_ids,
-                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+                                  mask=mask)
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
@@ -442,8 +443,7 @@ class ElectraNerModel(ElectraForTokenClassification):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
+        self.use_crf, self.crf_layer = init_crf(config)
 
         self.init_weights()
 
@@ -471,9 +471,10 @@ class ElectraNerModel(ElectraForTokenClassification):
 
         if self.use_crf:
             # logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            mask = attention_mask.detach().clone().type(torch.bool)
             loss = self.crf_layer(emissions=logits,
                                   tags=label_ids,
-                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+                                  mask=mask)
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
@@ -497,8 +498,7 @@ class DeBertaNerModel(DebertaPreTrainedModel):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
+        self.use_crf, self.crf_layer = init_crf(config)
 
         self.init_weights()
 
@@ -531,9 +531,10 @@ class DeBertaNerModel(DebertaPreTrainedModel):
 
         if self.use_crf:
             # logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            mask = attention_mask.detach().clone().type(torch.bool)
             loss = self.crf_layer(emissions=logits,
                                   tags=label_ids,
-                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+                                  mask=mask)
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
@@ -555,8 +556,7 @@ class DeBertaV2NerModel(DebertaV2ForTokenClassification):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
+        self.use_crf, self.crf_layer = init_crf(config)
 
         self.init_weights()
 
@@ -589,9 +589,10 @@ class DeBertaV2NerModel(DebertaV2ForTokenClassification):
 
         if self.use_crf:
             # logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            mask = attention_mask.detach().clone().type(torch.bool)
             loss = self.crf_layer(emissions=logits,
                                   tags=label_ids,
-                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+                                  mask=mask)
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:
@@ -621,8 +622,7 @@ class MegatronNerModel(MegatronBertPreTrainedModel):
         else:
             self.loss_fct = nn.CrossEntropyLoss()
 
-        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
-        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
+        self.use_crf, self.crf_layer = init_crf(config)
 
         self.init_weights()
 
@@ -640,9 +640,10 @@ class MegatronNerModel(MegatronBertPreTrainedModel):
 
         if self.use_crf:
             # logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            mask = attention_mask.detach().clone().type(torch.bool)
             loss = self.crf_layer(emissions=logits,
                                   tags=label_ids,
-                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+                                  mask=mask)
             active_logits = None
             logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
         else:

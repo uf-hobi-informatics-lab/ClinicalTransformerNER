@@ -8,6 +8,12 @@ from torch.optim.lr_scheduler import LambdaLR
 import math
 
 
+def init_crf(config):
+    use_crf = config.use_crf if hasattr(config, "use_crf") else None
+    crf_layer = New_Transformer_CRF(config.num_labels, label2idx=config.label2idx) if use_crf else None
+    return use_crf, crf_layer
+
+
 def get_linear_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, min_lr=1e-6, last_epoch=-1):
     # this scheduler will use min_lr instead of 0
     def lr_lambda(current_step: int):
@@ -351,7 +357,7 @@ class PGD:
 
 class New_Transformer_CRF(nn.Module):
     """Conditional random field.
-    This module implements a conditional random field [LMP01]_. The forward computation
+    This module implements a conditional random field. The forward computation
     of this class computes the log likelihood of the given sequence of tags and
     emission score tensor. This class also has `~CRF.decode` method which finds
     the best tag sequence given an emission score tensor using `Viterbi algorithm`_.
@@ -369,24 +375,39 @@ class New_Transformer_CRF(nn.Module):
             ``(num_tags,)``.
         transitions (`~torch.nn.Parameter`): Transition score tensor of size
             ``(num_tags, num_tags)``.
-    .. [LMP01] Lafferty, J., McCallum, A., Pereira, F. (2001).
+    .. Lafferty, J., McCallum, A., Pereira, F. (2001).
        "Conditional random fields: Probabilistic models for segmenting and
        labeling sequence data". *Proc. 18th International Conf. on Machine
        Learning*. Morgan Kaufmann. pp. 282–289.
     .. _Viterbi algorithm: https://en.wikipedia.org/wiki/Viterbi_algorithm
     """
 
-    def __init__(self, num_tags: int, batch_first=True) -> None:
+    def __init__(self, num_tags: int, label2idx=None, batch_first=True) -> None:
         if num_tags <= 0:
             raise ValueError(f'invalid number of tags: {num_tags}')
+        assert num_tags == len(label2idx), f"given number of tags is {num_tags} but label2idx table is {label2idx}"
+
         super().__init__()
         self.num_tags = num_tags
         self.batch_first = batch_first
         self.start_transitions = nn.Parameter(torch.empty(num_tags))
         self.end_transitions = nn.Parameter(torch.empty(num_tags))
         self.transitions = nn.Parameter(torch.empty(num_tags, num_tags))
-
         self.reset_parameters()
+
+        # integrate masked CRF (https://github.com/DandyQi/MaskedCRF)
+        self.label2idx = label2idx
+        self.get_masked_transitions()
+
+    def get_masked_transitions(self):
+        with torch.no_grad():
+            for col_tag, col_index in self.label2idx.items():
+                if col_tag.startswith("I-"):
+                    slot_name = col_tag.replace("I-", "")
+                    begin_slot = "B-" + slot_name
+                    for row_tag, row_index in self.label2idx.items():
+                        if row_tag != begin_slot and row_tag != col_tag and row_tag != "X":
+                            self.transitions[row_index, col_index] = -100.0
 
     def reset_parameters(self) -> None:
         """Initialize the transition parameters.
