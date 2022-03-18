@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 We will not use multi-GPUs training for NER (no n_gpu arg anymore)
-If we will add multi-GPUs training, using ditributed method (local_rank)
+If we will add multi-GPUs training, using distributed method (local_rank)
 
 We will support cache and load cache data in future but not implemented here since clinical NER dataset is relatively small)
 
@@ -212,25 +212,32 @@ def train(args, model, train_features, dev_features):
     t_total = len(data_loader) // args.gradient_accumulation_steps * args.num_train_epochs
 
     # parameters for optimization
-    cls = ['classifier.weight']
     no_decay = ['bias', 'LayerNorm.weight']
-    crfs = ['crf_layer.end_transitions', 'crf_layer.start_transitions', 'crf_layer.transitions']
-    # this is empirical (magic) number, you need to change the scalers for different datasets
-    learning_rate_scaler_crf = 1
-    learning_rate_scaler_cls = 1
-
     optimizer_grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in (no_decay + crfs + cls))],
+        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
          'weight_decay': args.weight_decay},
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
-         'weight_decay': 0.0},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in crfs)],
-         'lr': args.learning_rate * learning_rate_scaler_crf, 'weight_decay': args.weight_decay},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in cls)],
-         'lr': args.learning_rate * learning_rate_scaler_cls, 'weight_decay': args.weight_decay}
+         'weight_decay': 0.0}
     ]
 
+    # # this is empirical (magic) number, you need to change the scalers for different datasets
+    # cls = ['classifier.weight']
+    # crfs = ['crf_layer.end_transitions', 'crf_layer.start_transitions', 'crf_layer.transitions']
+    # learning_rate_scaler_crf = 1
+    # learning_rate_scaler_cls = 1
+    # optimizer_grouped_parameters = [
+    #     {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in (no_decay + crfs + cls))],
+    #      'weight_decay': args.weight_decay},
+    #     {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
+    #      'weight_decay': 0.0},
+    #     {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in crfs)],
+    #      'lr': args.learning_rate * learning_rate_scaler_crf, 'weight_decay': args.weight_decay},
+    #     {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in cls)],
+    #      'lr': args.learning_rate * learning_rate_scaler_cls, 'weight_decay': args.weight_decay}
+    # ]
+
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+    args.logger.info(optimizer)
 
     # using fp16 for training rely on Nvidia apex package
     # fp16 training: try to use PyTorch naive implementation if available; we will only support apex anymore
