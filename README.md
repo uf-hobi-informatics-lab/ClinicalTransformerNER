@@ -113,6 +113,8 @@ python ./src/run_transformer_batch_prediction.py \
 ####
 ```
 
+- note: the CRF layer we implemented is based on pytorch-crf (https://pytorch-crf.readthedocs.io/en/stable/) with a modification by integration of the masked CRF (https://github.com/DandyQi/MaskedCRF)
+
 ## Usage and example (biaffine approach)
 - implementation of https://aclanthology.org/2020.acl-main.577.pdf
 - see tutorial/convert_other_format_data_to_biaffine_format.ipynb for how to construct data from brat or bio format for biaffine model
@@ -228,4 +230,4 @@ please cite our paper:
 - https://transformer-models.s3.amazonaws.com/mimiciii_xlnet_5e_128b.zip
 - https://transformer-models.s3.amazonaws.com/mimiciii_deberta_10e_128b.tar.gz
 - https://transformer-models.s3.amazonaws.com/mimiciii_longformer_5e_128b.zip
-> note: all model pretraining tasks were done with the scripts at https://github.com/huggingface/transformers/tree/master/examples/language-modeling with a few customization.
+> note: 1. all mimic models are base version; 2. all model pretraining tasks were done with the scripts at https://github.com/huggingface/transformers/tree/master/examples/language-modeling with a few customization.

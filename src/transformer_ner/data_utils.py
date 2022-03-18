@@ -338,6 +338,7 @@ def transformer_convert_data_to_features(args, input_examples, label2idx, tokeni
         feature = _transformer_convert_data_to_features_helper(args, raw_tokens, labels, guide, label2idx, tokenizer, max_seq_len)
         features.extend(feature)
         fea = feature[0]
+        ll = sum(fea.attention_mask)
         if idx < 3:
             args.logger.info("""
 ************** Example ************
@@ -348,7 +349,12 @@ mask: {}
 segment ids: {}
 guards: {}
 ***********************************
-            """.format(fea.input_tokens, fea.input_ids, fea.label, fea.attention_mask, fea.token_type_ids, fea.guards))
+            """.format(fea.input_tokens[: ll],
+                       fea.input_ids[: ll],
+                       fea.label[: ll],
+                       fea.attention_mask[: ll],
+                       fea.token_type_ids[: ll],
+                       fea.guards[: ll]))
 
     return features
 
