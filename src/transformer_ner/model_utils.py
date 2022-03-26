@@ -7,6 +7,8 @@ from torch.nn import functional as F
 from torch.optim.lr_scheduler import LambdaLR
 import math
 
+from common_utils.common_io import load_config
+
 
 def init_crf(config):
     use_crf = config.use_crf if hasattr(config, "use_crf") else None
@@ -246,9 +248,6 @@ def _calculate_loss(logits, attention_mask, label_ids, loss_fct=None, num_labels
     return loss, active_logits
 
 
-# https://github.com/ShannonAI/dice_loss_for_NLP/blob/master/loss/dice_loss.py
-
-
 # Fast Gradient Method for ADVERSARIAL TRAINING
 class FGM:
     """
@@ -267,11 +266,12 @@ class FGM:
             optimizer.step()
             model.zero_grad()
     """
-    def __init__(self, model):
+
+    def __init__(self, model, *args, **kwargs):
         self.model = model
         self.backup = {}
 
-    def attack(self, epsilon=1., emb_name='embeddings.'):
+    def attack(self, epsilon=1., emb_name='embeddings.word_embeddings'):
         for name, param in self.model.named_parameters():
             if param.requires_grad and emb_name in name:
                 self.backup[name] = param.data.clone()
@@ -280,7 +280,7 @@ class FGM:
                     r_at = epsilon * param.grad / norm
                     param.data.add_(r_at)
 
-    def restore(self, emb_name='embeddings.'):
+    def restore(self, emb_name='embeddings.word_embeddings'):
         for name, param in self.model.named_parameters():
             if param.requires_grad and emb_name in name:
                 assert name in self.backup
@@ -313,12 +313,18 @@ class PGD:
             optimizer.step()
             model.zero_grad()
     """
-    def __init__(self, model):
+
+    def __init__(self, model, config_fn=None):
         self.model = model
         self.emb_backup = {}
         self.grad_backup = {}
+        self.config = load_config(config_fn)
 
-    def attack(self, epsilon=1., alpha=0.3, emb_name='embeddings.', is_first_attack=False):
+    def attack(self, is_first_attack=False):
+        epsilon = self.config.epsilon
+        alpha = self.config.alpha
+        emb_name = self.config.emb_name
+
         for name, param in self.model.named_parameters():
             if param.requires_grad and emb_name in name:
                 if is_first_attack:
@@ -329,7 +335,9 @@ class PGD:
                     param.data.add_(r_at)
                     param.data = self.project(name, param.data, epsilon)
 
-    def restore(self, emb_name='embeddings.'):
+    def restore(self):
+        emb_name = self.config.emb_name
+
         for name, param in self.model.named_parameters():
             if param.requires_grad and emb_name in name:
                 assert name in self.emb_backup
@@ -352,7 +360,84 @@ class PGD:
             if param.requires_grad:
                 param.grad = self.grad_backup[name]
 
-# TODO: https://github.com/zhuchen03/FreeLB/blob/master/huggingface-transformers/examples/run_glue_freelb.py
+
+class FreeLB:
+    """
+        https://arxiv.org/pdf/1909.11764.pdf
+        https://github.com/zhuchen03/FreeLB/blob/master/huggingface-transformers/examples/run_glue_freelb.py
+    """
+    def __init__(self, model, config_fn=None):
+        self.args = load_config(config_fn)
+        self.model = model
+        self.adv_K = self.args.adv_K
+        self.adv_lr = self.args.adv_lr
+        self.adv_max_norm = self.args.adv_max_norm
+        self.adv_init_mag = self.args.adv_init_mag  # adv-training initialize with what magnitude
+        self.adv_norm_type = self.args.adv_norm_type
+        self.base_model = self.args.base_model
+
+    def attack(self, model, inputs, fp16=False, scaler=None):
+        args = self.args
+        input_ids = inputs['input_ids']
+
+        embeds_init = getattr(model, self.base_model).embeddings.word_embeddings(input_ids)
+
+        if self.adv_init_mag > 0:
+            input_mask = inputs['attention_mask'].to(embeds_init)
+            input_lengths = torch.sum(input_mask, 1)
+            if self.adv_norm_type == "l2":
+                delta = torch.zeros_like(embeds_init).uniform_(-1, 1) * input_mask.unsqueeze(2)
+                dims = input_lengths * embeds_init.size(-1)
+                mag = self.adv_init_mag / torch.sqrt(dims)
+                delta = (delta * mag.view(-1, 1, 1)).detach()
+            elif self.adv_norm_type == "linf":
+                delta = torch.zeros_like(embeds_init).uniform_(
+                    -self.adv_init_mag, self.adv_init_mag) * input_mask.unsqueeze(2)
+            else:
+                raise RuntimeError(f"not support {self.adv_norm_type} for norm type; check your config file.")
+        else:
+            delta = torch.zeros_like(embeds_init)
+
+        adv_loss = None
+        for astep in range(self.adv_K):
+            delta.requires_grad_()
+            inputs['inputs_embeds'] = delta + embeds_init
+            _, _, adv_loss = model(input_ids=None,
+                               attention_mask=inputs["attention_mask"],
+                               token_type_ids=inputs["token_type_ids"],
+                               label_ids=inputs["label_ids"],
+                               inputs_embeds=inputs["inputs_embeds"])
+
+            adv_loss = adv_loss / self.adv_K
+
+            if fp16:
+                scaler.scale(adv_loss).backward()
+            else:
+                adv_loss.backward()
+
+            if astep == self.adv_K - 1:
+                break
+
+            delta_grad = delta.grad.clone().detach()
+            if self.adv_norm_type == "l2":
+                denorm = torch.norm(delta_grad.view(delta_grad.size(0), -1), dim=1).view(-1, 1, 1)
+                denorm = torch.clamp(denorm, min=1e-8)
+                delta = (delta + self.adv_lr * delta_grad / denorm).detach()
+                if self.adv_max_norm > 0:
+                    delta_norm = torch.norm(delta.view(delta.size(0), -1).float(), p=2, dim=1).detach()
+                    exceed_mask = (delta_norm > self.adv_max_norm).to(embeds_init)
+                    reweights = (self.adv_max_norm / delta_norm * exceed_mask + (1 - exceed_mask)).view(-1, 1, 1)
+                    delta = (delta * reweights).detach()
+            elif self.adv_norm_type == "linf":
+                denorm = torch.norm(delta_grad.view(delta_grad.size(0), -1), dim=1, p=float("inf")).view(-1, 1, 1)
+                denorm = torch.clamp(denorm, min=1e-8)
+                delta = (delta + self.adv_lr * delta_grad / denorm).detach()
+                if self.adv_max_norm > 0:
+                    delta = torch.clamp(delta, -self.adv_max_norm, self.adv_max_norm).detach()
+            else:
+                raise RuntimeError(f"not support {self.adv_norm_type} for norm type; check your config file.")
+
+            embeds_init = getattr(model, self.base_model).embeddings.word_embeddings(input_ids)
 
 
 class New_Transformer_CRF(nn.Module):
@@ -683,6 +768,7 @@ class Old_Transformer_CRF(nn.Module):
         This is old crf implementation which does not have mask
         Using new crf adapted from pytorch-crf in future
     """
+
     def __init__(self, config):
         super().__init__()
         self.num_labels = config.num_labels
@@ -739,7 +825,7 @@ class Old_Transformer_CRF(nn.Module):
 
         for t in range(1, seq_size):
             batch_trans_score = batch_transitions.gather(
-                -1, (label_ids[:, t] * self.num_labels + label_ids[:, t-1]).view(-1, 1))
+                -1, (label_ids[:, t] * self.num_labels + label_ids[:, t - 1]).view(-1, 1))
             temp_score = feats[:, t].gather(-1, label_ids[:, t].view(-1, 1)).view(-1, 1)
             score = score + batch_trans_score + temp_score
 
@@ -749,7 +835,7 @@ class Old_Transformer_CRF(nn.Module):
         # trace back
         path = self.path.expand(batch_size, seq_size).clone()
         max_logLL_allz_allx, path[:, -1] = torch.max(log_delta.squeeze(), -1)
-        for t in range(seq_size-2, -1, -1):
-            path[:, t] = psi[:, t+1].gather(-1, path[:, t+1].view(-1, 1)).squeeze()
+        for t in range(seq_size - 2, -1, -1):
+            path[:, t] = psi[:, t + 1].gather(-1, path[:, t + 1].view(-1, 1)).squeeze()
 
         return max_logLL_allz_allx, path, score

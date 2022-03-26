@@ -61,7 +61,8 @@ class Args:
         self.use_biaffine = False
         self.mlp_dim = 128
         self.mlp_layers = 0
-        self.adversarial_training_method = None  # None, "fgm", "pgd"
+        self.adversarial_training_method = None  # None, "fgm", "pgd", "freelb
+        self.adversarial_training_conf = None
 
 
 def test():
@@ -104,8 +105,20 @@ def test3():
     run_task(args)
 
 
+def test4():
+    # test prediction
+    args = Args("bert", 'bert-base-uncased', do_train=True, do_predict=True,
+                new_model_dir=Path(
+                    __file__).resolve().parent.parent.parent / "new_ner_model" / "bert-base-uncased_conll2003")
+    # args.adversarial_training_method = "pgd"
+    # args.adversarial_training_conf = Path(__file__).resolve().parent.parent / "examples" / "PGD_conf.json"
+    args.adversarial_training_method = "freelb"
+    args.adversarial_training_conf = Path(__file__).resolve().parent.parent / "examples" / "FreeLB_conf.json"
+    run_task(args)
+
+
 if __name__ == '__main__':
-    which_test = input("run which test? 1 or 2 or 3")
+    which_test = input("run which test? 1 or 2 or 3 or 4")
     if which_test == "0":
         test()
     elif which_test == "1":
@@ -114,3 +127,5 @@ if __name__ == '__main__':
         test2()
     elif which_test == "3":
         test3()
+    elif which_test == "4":
+        test4()

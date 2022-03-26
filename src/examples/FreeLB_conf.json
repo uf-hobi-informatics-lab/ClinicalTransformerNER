@@ -1,0 +1,10 @@
+{
+  "adv_init_mag": 0.01,
+  "adv_lr": 0.02,
+  "adv_max_norm": 0,
+  "adv_K": 3,
+  "_comment on norm type": "The program support two types of norm type as l2 and linf",
+  "adv_norm_type": "l2",
+  "_comment base_model": "use model type here see args.model_type (e.g., bert, roberta, albert)",
+  "base_model": "bert"
+}

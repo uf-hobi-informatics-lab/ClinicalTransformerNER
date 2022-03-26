@@ -45,7 +45,7 @@ from transformer_ner.model import (AlbertNerModel, BartNerModel,
                                    DeBertaNerModel, DistilBertNerModel,
                                    ElectraNerModel, LongformerNerModel,
                                    RobertaNerModel, DeBertaV2NerModel, MegatronNerModel)
-from transformer_ner.model_utils import PGD, FGM, get_linear_schedule_with_warmup
+from transformer_ner.model_utils import PGD, FGM, FreeLB, get_linear_schedule_with_warmup
 
 
 MODEL_CLASSES = {
@@ -65,7 +65,8 @@ MODEL_CLASSES = {
 
 ADVERSARIAL_TRAINER = {
     "pgd": PGD,
-    "fgm": FGM
+    "fgm": FGM,
+    "freelb": FreeLB
 }
 
 
@@ -180,15 +181,18 @@ def set_seed(seed=13):
         torch.cuda.manual_seed_all(seed)
 
 
-def adversarial_train(args, trainer, model=None, batch=None, k=3):
-    # for pgd, we current hard code K as 3
-    # TODO: add argument to allow change K for PGD method
+def adversarial_train(args, trainer, model=None, batch=None, scaler=None):
+    # see /example/*.json for how to config these training methods
     if args.adversarial_training_method == "fgm":
         trainer.attack()
         _, _, loss_adv = model(**batch)
-        loss_adv.backward()
+        if args.fp16:
+            scaler.scale(loss_adv).backward()
+        else:
+            loss_adv.backward()
         trainer.restore()
     elif args.adversarial_training_method == "pgd":
+        k = trainer.config.K
         trainer.backup_grad()
         for t in range(k):
             trainer.attack(is_first_attack=(t == 0))
@@ -197,8 +201,13 @@ def adversarial_train(args, trainer, model=None, batch=None, k=3):
             else:
                 trainer.restore_grad()
             _, _, loss_adv = model(**batch)
-            loss_adv.backward()
+            if args.fp16:
+                scaler.scale(loss_adv).backward()
+            else:
+                loss_adv.backward()
         trainer.restore()
+    elif args.adversarial_training_method == "freelb":
+        trainer.attack(model, batch, args.fp16, scaler)
     else:
         raise RuntimeError(
             f"adopt adversarial training but use an unrecognized method name: {args.adversarial_training_method}")
@@ -287,8 +296,9 @@ def train(args, model, train_features, dev_features):
     model.zero_grad()
 
     # apply ADVERSARIAL TRAINING
-    adversarial_trainer = ADVERSARIAL_TRAINER[args.adversarial_training_method](model) \
-        if args.adversarial_training else None
+    adversarial_trainer_class = ADVERSARIAL_TRAINER[args.adversarial_training_method]
+    adversarial_trainer = adversarial_trainer_class(
+        model, config_fn=args.adversarial_training_conf) if args.adversarial_training else None
 
     epoch_iter = trange(int(args.num_train_epochs), desc="Epoch", disable=not args.progress_bar)
     for epoch in epoch_iter:
@@ -315,7 +325,7 @@ def train(args, model, train_features, dev_features):
 
             # apply ADVERSARIAL TRAINING
             if args.adversarial_training:
-                adversarial_train(args, adversarial_trainer, model, train_inputs)
+                adversarial_train(args, adversarial_trainer, model, train_inputs, scaler)
 
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if args.fp16:
@@ -613,6 +623,10 @@ def run_task(args):
             config.use_focal_loss = args.focal_loss
             config.focal_loss_gamma = args.focal_loss_gamma
             config.mlp_dim = args.mlp_dim
+            if args.adversarial_training_method in {"fgm", "pgd"}:
+                # turn off dropout when use FGm or PGD
+                # FreeLB can work with dropout
+                config.hidden_dropout_prob = 0.0
             args.logger.info("New Model Config:\n{}".format(config))
         else:
             config = model_config.from_pretrained(args.config_name, num_labels=num_labels)

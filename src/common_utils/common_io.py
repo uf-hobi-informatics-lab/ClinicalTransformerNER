@@ -4,6 +4,28 @@ import json
 import pickle as pkl
 
 
+def load_config(fn):
+    """
+    we assume the config file is a json file
+    we will create a config class based on the json fields
+    """
+
+    class Conf:
+        def __init__(self, args):
+            for k, v in args.items():
+                setattr(self, k, v)
+
+        def __str__(self):
+            s = ""
+            for k, v in self.__dict__.items():
+                s += "{}={}\n".format(k, v)
+            return s
+
+    fields = Conf(json_load(fn))
+
+    return fields
+
+
 def read_from_file(ifn):
     with open(ifn, "r") as f:
         text = f.read()

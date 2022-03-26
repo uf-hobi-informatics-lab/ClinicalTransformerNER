@@ -1,0 +1,6 @@
+{
+  "epsilon": 1.0,
+  "alpha": 0.3,
+  "emb_name": "embeddings.word_embeddings",
+  "K": 3
+}

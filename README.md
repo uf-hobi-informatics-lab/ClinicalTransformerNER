@@ -113,7 +113,8 @@ python ./src/run_transformer_batch_prediction.py \
 ####
 ```
 
-- note: the CRF layer we implemented is based on pytorch-crf (https://pytorch-crf.readthedocs.io/en/stable/) with a modification by integration of the masked CRF (https://github.com/DandyQi/MaskedCRF)
+- CRF_layer: the CRF layer we implemented is based on pytorch-crf (https://pytorch-crf.readthedocs.io/en/stable/) with a modification by integration of the masked CRF (https://github.com/DandyQi/MaskedCRF)
+- ADVERSARIAL TRAINING:  we support three methods (FGM, PGD, and FreeLB) for adversarial training.
 
 ## Usage and example (biaffine approach)
 - implementation of https://aclanthology.org/2020.acl-main.577.pdf

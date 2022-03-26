@@ -66,6 +66,7 @@ class Args:
         self.mlp_layers = 0
         self.mlp_hidden_dim = 0
         self.adversarial_training_method = None  # None, "fgm", "pgd"
+        self.adversarial_training_conf = None
 
 
 def test():

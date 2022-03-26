@@ -55,11 +55,12 @@ class BertNerModel(BertPreTrainedModel):
         self.init_weights()
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None,
-                position_ids=None, head_mask=None, label_ids=None):
+                position_ids=None, head_mask=None, label_ids=None, inputs_embeds=None):
         outputs = self.bert(input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
                             position_ids=position_ids,
+                            inputs_embeds=inputs_embeds,
                             head_mask=head_mask)
 
         sequence_output = outputs[0]
@@ -102,7 +103,7 @@ class RobertaNerModel(BertPreTrainedModel):
         self.init_weights()
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None,
-                position_ids=None, head_mask=None, label_ids=None):
+                position_ids=None, head_mask=None, label_ids=None, inputs_embeds=None):
         """
         :return: raw logits without any softmax or log_softmax transformation
 
@@ -119,6 +120,7 @@ class RobertaNerModel(BertPreTrainedModel):
                                attention_mask=attention_mask,
                                token_type_ids=token_type_ids,
                                position_ids=position_ids,
+                               inputs_embeds=inputs_embeds,
                                head_mask=head_mask)
 
         seq_outputs = outputs[0]
@@ -216,11 +218,12 @@ class AlbertNerModel(AlbertPreTrainedModel):
         self.init_weights()
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None,
-                position_ids=None, head_mask=None, label_ids=None):
+                position_ids=None, head_mask=None, label_ids=None, inputs_embeds=None):
         outputs = self.albert(input_ids,
                               attention_mask=attention_mask,
                               token_type_ids=token_type_ids,
                               position_ids=position_ids,
+                              inputs_embeds=inputs_embeds,
                               head_mask=head_mask)
 
         seq_outputs = outputs[0]
@@ -267,11 +270,13 @@ class DistilBertNerModel(BertPreTrainedModel):
                 attention_mask=None,
                 token_type_ids=None,
                 position_ids=None,
+                inputs_embeds=None,
                 head_mask=None,
                 label_ids=None):
 
         outputs = self.distilbert(input_ids,
                                   attention_mask=attention_mask,
+                                  inputs_embeds=inputs_embeds,
                                   head_mask=head_mask)
 
         sequence_output = outputs[0]
@@ -389,7 +394,7 @@ class BartNerModel(PreTrainedModel):
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
 
-    def forward(self, input_ids, attention_mask=None, decoder_input_ids=None, encoder_outputs=None,
+    def forward(self, input_ids, attention_mask=None, decoder_input_ids=None, encoder_outputs=None, inputs_embeds=None,
                 decoder_attention_mask=None, decoder_cached_states=None, label_ids=None):
         # dco = decoder output; eco = encoder output
         dco, eco = self.bart(input_ids,
@@ -397,6 +402,7 @@ class BartNerModel(PreTrainedModel):
                              decoder_input_ids=decoder_input_ids,
                              encoder_outputs=encoder_outputs,
                              decoder_attention_mask=decoder_attention_mask,
+                             inputs_embeds=inputs_embeds,
                              decoder_cached_states=decoder_cached_states
                              )
         if self.output_concat:
@@ -627,11 +633,12 @@ class MegatronNerModel(MegatronBertPreTrainedModel):
         self.init_weights()
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None,
-                position_ids=None, head_mask=None, label_ids=None):
+                position_ids=None, head_mask=None, label_ids=None, inputs_embeds=None):
         outputs = self.bert(input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
                             position_ids=position_ids,
+                            inputs_embeds=inputs_embeds,
                             head_mask=head_mask)
 
         sequence_output = outputs[0]

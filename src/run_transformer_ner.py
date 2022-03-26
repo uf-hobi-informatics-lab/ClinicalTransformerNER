@@ -117,8 +117,10 @@ def main():
                         help="config file for w2ner, only used when --use_w2 is set")
     # adversarial training method: pgd, fgm
     parser.add_argument("--adversarial_training_method", default=None,
-                        help="what method to use for adversarial training, support pgd and fgm; "
+                        help="what method to use for adversarial training, support freelb, pgd and fgm. "
                              "default is None which disable this function")
+    parser.add_argument("--adversarial_training_conf", default=None,
+                        help="config file for pgd or freelb; see /examples for how to define a config file.")
     # fp16 and distributed training (we use pytorch naive implementation instead of Apex)
     parser.add_argument('--fp16', action='store_true',
                         help="Whether to use 16-bit float precision instead of 32-bit")

@@ -9,6 +9,9 @@ e.g.: python gold_annotations system_annotations
 
 Please note that you must use Python 3 to get the correct results with this script
 
+The code is based on evaluation script released from 2018 n2c2 challenge
+
+We modified the script to make it for generic use on any annotations based on brat format
 """
 
 
@@ -353,7 +356,7 @@ class MultipleEvaluator(object):
         for target in ('tags', 'relations'):
             # Normalization
             for key in self.scores[target]['macro'].keys():
-                self.scores[target]['macro'][key] = self.scores[target]['macro'][key] / len(corpora.docs)
+                self.scores[target]['macro'][key] = self.scores[target]['macro'][key] / corpora.non_empty_docs
 
             measures = Measures(tp=self.scores[target]['tp'],
                                 fp=self.scores[target]['fp'],
@@ -467,6 +470,16 @@ class Corpora(object):
             g = RecordTrack2(os.path.join(self.folder1, file), tags_to_exclude)
             s = RecordTrack2(os.path.join(self.folder2, file), tags_to_exclude)
             self.docs.append((g, s))
+
+        self.non_empty_docs = self._get_non_empty_docs()
+
+    def _get_non_empty_docs(self):
+        cnt = len(self.docs)
+        for g, s in self.docs:
+            if len(g.tags) == len(s.tags) == 0:
+                cnt -= 1
+
+        return cnt
 
     def get_annotations(self):
         gs_tags = set()
