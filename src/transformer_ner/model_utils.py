@@ -398,15 +398,14 @@ class FreeLB:
         else:
             delta = torch.zeros_like(embeds_init)
 
-        adv_loss = None
         for astep in range(self.adv_K):
             delta.requires_grad_()
             inputs['inputs_embeds'] = delta + embeds_init
             _, _, adv_loss = model(input_ids=None,
-                               attention_mask=inputs["attention_mask"],
-                               token_type_ids=inputs["token_type_ids"],
-                               label_ids=inputs["label_ids"],
-                               inputs_embeds=inputs["inputs_embeds"])
+                                   attention_mask=inputs["attention_mask"],
+                                   token_type_ids=inputs["token_type_ids"],
+                                   label_ids=inputs["label_ids"],
+                                   inputs_embeds=inputs["inputs_embeds"])
 
             adv_loss = adv_loss / self.adv_K
 

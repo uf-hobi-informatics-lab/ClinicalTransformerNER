@@ -623,9 +623,8 @@ def run_task(args):
             config.use_focal_loss = args.focal_loss
             config.focal_loss_gamma = args.focal_loss_gamma
             config.mlp_dim = args.mlp_dim
-            if args.adversarial_training_method in {"fgm", "pgd"}:
-                # turn off dropout when use FGm or PGD
-                # FreeLB can work with dropout
+            if args.adversarial_training_method is not None:
+                # turn off dropout if using adversarial training
                 config.hidden_dropout_prob = 0.0
             args.logger.info("New Model Config:\n{}".format(config))
         else:
