@@ -296,7 +296,8 @@ def train(args, model, train_features, dev_features):
     model.zero_grad()
 
     # apply ADVERSARIAL TRAINING
-    adversarial_trainer_class = ADVERSARIAL_TRAINER[args.adversarial_training_method]
+    adversarial_trainer_class = ADVERSARIAL_TRAINER[args.adversarial_training_method] \
+        if args.adversarial_training else None
     adversarial_trainer = adversarial_trainer_class(
         model, config_fn=args.adversarial_training_conf) if args.adversarial_training else None
 
