@@ -588,7 +588,7 @@ def run_task(args):
     # if use resume_from_model,
     # we need to check the label in new data exact same as the one used in training previous model
     if args.do_train and args.resume_from_model is not None:
-        label2idx_from_old = json_load(Path(args.resume_from_model / "label2idx.json"))
+        label2idx_from_old = json_load(Path(args.resume_from_model) / "label2idx.json")
         assert len(label2idx_from_old) == len(label2idx), """expect same label2idx but get old one from resume model as {};
         and the new one from current data is {}""".format(label2idx_from_old, label2idx)
         for k in label2idx.keys():
