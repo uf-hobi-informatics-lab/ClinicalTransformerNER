@@ -13,7 +13,7 @@ from transformers import (AlbertTokenizer, BartTokenizer, BertTokenizer,
                           ElectraTokenizer, LongformerTokenizer,
                           RobertaTokenizer, XLNetTokenizer, DebertaV2Tokenizer)
 
-NEXT_TOKEN = "[next]"
+NEXT_TOKEN = "[NEXT]"
 NEXT_GUARD = -2
 
 
