@@ -53,6 +53,18 @@ def _print_info(predictions):
             break
 
 
+def remove_redundant_prediction_span_matrix():
+    """
+        it is known that span matrix prediction for nested NER can generate redundant preds
+        e.g., [[16, 21, 'lifetime non - smoker', 'Tobacco'],
+                [17, 21, 'non - smoker', 'Tobacco']]
+        The two predictions are same and the GS is the first one
+        The reason is due to inconsistent annotation
+        This function aim to solve situation like this
+    """
+    pass
+
+
 def biaffine2bio(raw_bio_file, biaffine_output_file, formatted_output_dir):
     p_output = Path(formatted_output_dir)
     p_output.mkdir(exist_ok=True, parents=True)
@@ -70,7 +82,7 @@ def biaffine2bio(raw_bio_file, biaffine_output_file, formatted_output_dir):
     _print_info(predictions)
 
     assert len(predictions) == len(nsents), f"expect same predictions and mappings but get " \
-                                              f"{len(predictions)} predictions and {len(nsents)} mappings"
+                                            f"{len(predictions)} predictions and {len(nsents)} mappings"
 
     labeled_sents = []
     for pred, sent in zip(predictions, nsents):
@@ -124,7 +136,7 @@ def biaffine2brat(raw_text_dir, biaffine_output_file, mapping_file, formatted_ou
 
             if nid != note_id:
                 nid = note_id
-                ntext = read_from_file(p/f"{nid}.txt")
+                ntext = read_from_file(p / f"{nid}.txt")
                 idx = 1
 
             org_s, org_e = words[0][1]
@@ -137,11 +149,11 @@ def biaffine2brat(raw_text_dir, biaffine_output_file, mapping_file, formatted_ou
             idx += 1
 
     for fid, brats in res_dict.items():
-        write_to_file("\n".join(brats), p_output/f"{fid}.ann")
+        write_to_file("\n".join(brats), p_output / f"{fid}.ann")
 
     if do_copy:
         for fn in p.glob("*.txt"):
-            shutil.copyfile(fn,  p_output/fn.name)
+            shutil.copyfile(fn, p_output / fn.name)
 
 
 def __prepare_path(text_dir, input_dir, output_dir):
@@ -182,7 +194,8 @@ def tag2entity(sents):
                         term.append(text)
                         start, end, sem_tag = w_s, w_e, ttag
                 else:
-                    raise ValueError('The BIO scheme only support B, I but get {}-{} in {}'.format(boundary, ttag, sent))
+                    raise ValueError(
+                        'The BIO scheme only support B, I but get {}-{} in {}'.format(boundary, ttag, sent))
             prev_tag = predict_tag
 
         if term:
@@ -218,13 +231,15 @@ def bio2output(text_dir, input_dir, output_dir, output_template, do_copy_text, f
 
                 if "\n" in raw_entity_text:
                     idx = raw_entity_text.index("\n")
-                    offset_s = "{} {};{}".format(offset_s, offset_s+idx, offset_s+idx+1)
+                    offset_s = "{} {};{}".format(offset_s, offset_s + idx, offset_s + idx + 1)
                     raw_entity_text = raw_entity_text.replace("\n", " ")
 
                 if file_suffix == "ann":
-                    formatted_output = output_template.format("T{}".format(idx+1), sem_tag, offset_s, offset_e, raw_entity_text)
+                    formatted_output = output_template.format("T{}".format(idx + 1), sem_tag, offset_s, offset_e,
+                                                              raw_entity_text)
                 elif file_suffix == "xml":
-                    formatted_output = output_template.format(a=idx+1, b=raw_entity_text, c=offset_s, d=offset_e-offset_s, e=sem_tag)
+                    formatted_output = output_template.format(a=idx + 1, b=raw_entity_text, c=offset_s,
+                                                              d=offset_e - offset_s, e=sem_tag)
                 else:
                     formatted_output = None
                     print('formatted output is None due to unknown formatter code')
@@ -251,4 +266,5 @@ def main(text_dir=None, input_bio_dir=None, output_dir=None, formatter=1, do_cop
     elif formatter == 2:
         bio2output(text_dir, input_bio_dir, output_dir, BIOC_TEMPLATE, do_copy_text, file_suffix='xml')
     else:
-        raise RuntimeError("Only support formatter as 1 and 2 but get {}; see help for more information.".format(formatter))
+        raise RuntimeError(
+            "Only support formatter as 1 and 2 but get {}; see help for more information.".format(formatter))
