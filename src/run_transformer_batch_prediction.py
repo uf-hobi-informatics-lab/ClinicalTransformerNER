@@ -89,7 +89,7 @@ def main(args):
                          labeled_bio_tup_lst=labeled_bio_tup_lst,
                          use_bio=args.use_bio)
 
-if __name__ == '__main__':
+def argparser(args=None):
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--model_type", default='bert', type=str, required=True,
@@ -124,8 +124,18 @@ if __name__ == '__main__':
                         help="show progress during the training in tqdm")
     parser.add_argument("--use_bio", action='store_true', default=False,
                         help="whether to use orignial text as input")
+    parser.add_argument("--gpu_nodes", nargs="+", default=None,
+                        help="use multiple gpu nodes")
+    
+    if args is None:
+        return parser.parse_args()
+    else:
+        return parser.parse_args(args)
 
-    global_args = parser.parse_args()
+
+if __name__ == '__main__':
+    global_args = argparser()
+    
     # create logger
     logger = TransformerNERLogger(global_args.log_file, global_args.log_lvl).get_logger()
     global_args.logger = logger
