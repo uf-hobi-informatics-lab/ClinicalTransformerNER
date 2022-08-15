@@ -13,6 +13,7 @@ from transformers import (AlbertTokenizer, BartTokenizer, BertTokenizer,
                           ElectraTokenizer, LongformerTokenizer,
                           RobertaTokenizer, XLNetTokenizer, DebertaV2Tokenizer)
 from NLPreprocessing.annotation2BIO import pre_processing, generate_BIO
+from NLPreprocessing.text_process.sentence_tokenization import SentenceBoundaryDetection
 NEXT_TOKEN = "[next]"
 NEXT_GUARD = -2
 
@@ -46,6 +47,7 @@ class TransformerNerDataProcessor(object):
         self.data_dir = None
         self.has_offset_info = False
         self.logger = None
+        self.sent_tokenizer = SentenceBoundaryDetection()
 
     def set_logger(self, logger):
         self.logger = logger
@@ -127,46 +129,46 @@ Otherwise will cause prediction error.''')
             use_bio (bool): True if file_name is a bio file, False if file_name is normalized text
         """
         assert task in {'train', 'test'}, 'task shoud be either train or test but got {}'.format(task)
-
+        
         def word_to_samples(words, unique_labels, splited=False):
-                nsent, offsets, labels = [], [], []
-                for j, word in enumerate(words):
+            nsent, offsets, labels = [], [], []
+            for j, word in enumerate(words):
                 word_info = word.split(" ") if not splited else word
-                    if len(word_info) < 2:
-                        warnings.warn("""
-                        The word at [line: {} pos: {}] has no position or label information.
-                        This word will cause potential runtime error.
-                        Check if you have extra empty line between two sentences in the BIO files.
-                        To avoid runtime error, we skip this word.
-                        If skipping is not correct, please check the data_utils.py at line 130.""".format(i+1, j+1),
-                                      RuntimeWarning)
-                        continue
-                    nsent.append(word_info[0])
-                    if self.has_offset_info:
-                        # In the BIO data, we require to record two sets of offsets (4 numbers) after token text.
-                        # e.g., Record 0 4 0 4 O
-                        # In the example, the first two numbers are original offsets,
-                        # the second two numbers are new offsets after pre-processing.
-                        # If your do not conduct pre-processing and only use the original offsets,
-                        # you can just set new offsets after pre-processing as original offsets to avoid index error.
-                        warnings.warn("""
-                        In the BIO data, we require to record two sets of offsets (4 numbers) after token text.
-                        e.g., Record 0 4 0 4 O
-                        In the example, the first two numbers are original offsets,
-                        the second two numbers are new offsets after pre-processing.
-                        If your do not conduct pre-processing and only use the original offsets,
-                        you can just set new offsets after pre-processing as original offsets to avoid index error.""")
-                        offsets.append((word_info[1], word_info[2], word_info[3], word_info[4]))
-                    if task == "train":
-                        unique_labels.add(word_info[-1])
-                        labels.append(word_info[-1])
-                    else:
-                        labels.append("O")
+                if len(word_info) < 2:
+                    warnings.warn("""
+                    The word at [line: {} pos: {}] has no position or label information.
+                    This word will cause potential runtime error.
+                    Check if you have extra empty line between two sentences in the BIO files.
+                    To avoid runtime error, we skip this word.
+                    If skipping is not correct, please check the data_utils.py at line 130.""".format(i+1, j+1),
+                                RuntimeWarning)
+                    continue
+                nsent.append(word_info[0])
+                if self.has_offset_info:
+                    # In the BIO data, we require to record two sets of offsets (4 numbers) after token text.
+                    # e.g., Record 0 4 0 4 O
+                    # In the example, the first two numbers are original offsets,
+                    # the second two numbers are new offsets after pre-processing.
+                    # If your do not conduct pre-processing and only use the original offsets,
+                    # you can just set new offsets after pre-processing as original offsets to avoid index error.
+                    warnings.warn("""
+                    In the BIO data, we require to record two sets of offsets (4 numbers) after token text.
+                    e.g., Record 0 4 0 4 O
+                    In the example, the first two numbers are original offsets,
+                    the second two numbers are new offsets after pre-processing.
+                    If your do not conduct pre-processing and only use the original offsets,
+                    you can just set new offsets after pre-processing as original offsets to avoid index error.""")
+                    offsets.append((word_info[1], word_info[2], word_info[3], word_info[4]))
+                if task == "train":
+                    unique_labels.add(word_info[-1])
+                    labels.append(word_info[-1])
+                else:
+                    labels.append("O")
             return (nsent, offsets, labels)
         
         if not use_bio:
             nsents = []
-            txt, sents = pre_processing(file_name, deid_pattern="\[\*\*|\*\*\]")
+            txt, sents = pre_processing(file_name, deid_pattern="\[\*\*|\*\*\]", sent_tokenizer=self.sent_tokenizer)
             sents, _ = generate_BIO(sents, [], no_overlap=False)
             nsents, unique_labels = [], set()
             for sent in sents:
