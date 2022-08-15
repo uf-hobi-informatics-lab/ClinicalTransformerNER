@@ -6,11 +6,12 @@ output file suffix will be set to .bio.txt
 """
 
 import argparse
-import os
+import os, sys, copy
 import traceback
 from pathlib import Path
 from collections import defaultdict
 import torch
+import torch.multiprocessing as mp
 import transformers
 from packaging import version
 
@@ -27,10 +28,14 @@ pytorch_version = version.parse(transformers.__version__)
 assert pytorch_version >= version.parse('3.0.0'), \
     'we now only support transformers version >=3.0.0, but your version is {}'.format(pytorch_version)
 
+def check_sample(idx, args):
+    if hasattr(args,"process_idx") and hasattr(args,"gpu_nodes"):
+        return (idx%len(args.gpu_nodes)) == args.process_idx
+    else:
+        return True
 
 def main(args):
     label2idx = json_load(os.path.join(args.pretrained_model, "label2idx.json"))
-    num_labels = len(label2idx)
     idx2label = {v: k for k, v in label2idx.items()}
     args.label2idx = label2idx
     args.idx2label = idx2label
@@ -40,6 +45,9 @@ def main(args):
     tokenizer = model_tokenizer.from_pretrained(args.pretrained_model, do_lower_case=args.do_lower_case)
     args.tokenizer = tokenizer
 
+    if hasattr(args,"model"):
+        model = args.model
+    else:
     config = model_config.from_pretrained(args.pretrained_model, do_lower_case=args.do_lower_case)
     args.config = config
     args.use_crf = config.use_crf
@@ -56,6 +64,8 @@ def main(args):
     # fids = [each.stem.split(".")[0] for each in Path(args.preprocessed_text_dir).glob("*.txt")]
     labeled_bio_tup_lst = defaultdict(dict)
     for i, each_file in enumerate(Path(args.preprocessed_text_dir).glob("*.txt")):
+        if not check_sample(i, args):
+            continue
         try:
             test_example = ner_data_processor.get_test_examples(file_name=each_file.name, use_bio=args.use_bio) #[(nsent, offsets, labels)]
             test_features = transformer_convert_data_to_features(args=args,
@@ -133,9 +143,37 @@ def argparser(args=None):
         return parser.parse_args(args)
 
 
+def multiprocessing_wrapper(args):
+    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, args.gpu_nodes))
+    
+    print("Use GPU devices: {}".format(os.environ["CUDA_VISIBLE_DEVICES"]))
+    
+    N_gpus = len(args.gpu_nodes)
+    args.N_gpus = N_gpus
+    args_lst = []
+    for i in range(N_gpus):
+        _args = copy.deepcopy(args)
+        _args.logger = TransformerNERLogger(_args.log_file, _args.log_lvl).get_logger()
+        
+        model_config, _, _ = MODEL_CLASSES[_args.model_type]
+        config = model_config.from_pretrained(_args.pretrained_model, do_lower_case=_args.do_lower_case)
+        _args.config = config
+        _args.use_crf = config.use_crf
+        _args.model = load_model(_args, _args.pretrained_model)
+        _args.device = torch.device("cuda",i)
+        _args.model.to(_args.device)
+        _args.process_idx = i
+        args_lst.append(_args)
+
+    mp.set_start_method('spawn')
+    with mp.Pool(N_gpus) as p:
+        p.map(main, args_lst)
+
 if __name__ == '__main__':
     global_args = argparser()
     
+    if global_args.gpu_nodes is None:
     # create logger
     logger = TransformerNERLogger(global_args.log_file, global_args.log_lvl).get_logger()
     global_args.logger = logger
@@ -145,3 +183,5 @@ if __name__ == '__main__':
                 if torch.cuda.device_count() else 'Task will use CPU.')
 
     main(global_args)
+    else:
+        multiprocessing_wrapper(global_args)
