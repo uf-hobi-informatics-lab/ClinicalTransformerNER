@@ -55,6 +55,7 @@ def main(args):
 
     # fids = [each.stem.split(".")[0] for each in Path(args.preprocessed_text_dir).glob("*.txt")]
     labeled_bio_tup_lst = defaultdict(dict)
+    for i, each_file in enumerate(Path(args.preprocessed_text_dir).glob("*.txt")):
         try:
             test_example = ner_data_processor.get_test_examples(file_name=each_file.name, use_bio=args.use_bio) #[(nsent, offsets, labels)]
             test_features = transformer_convert_data_to_features(args=args,
@@ -78,8 +79,7 @@ def main(args):
             args.logger.error(traceback.format_exc())
 
     if args.do_format:
-        base_path = Path(args.output_dir)
-        output_formatted_dir = base_path.parent / f"{base_path.stem}_formatted_output"
+        output_formatted_dir = Path(args.output_dir_brat) if args.output_dir_brat else Path(args.output_dir).parent / "{}_formatted_output".format(Path(args.output_dir).stem)  
         output_formatted_dir.mkdir(parents=True, exist_ok=True)
         format_converter(text_dir=args.raw_text_dir,
                          input_bio_dir=(args.output_dir if args.use_bio else args.raw_text_dir),
@@ -97,13 +97,15 @@ if __name__ == '__main__':
     parser.add_argument("--pretrained_model", type=str, required=True,
                         help="The pretrained model file or directory for fine tuning.")
     parser.add_argument("--preprocessed_text_dir", type=str, required=True,
-                        help="The input data directory.")
+                        help="The input data directory (bio with dummy label).")
     parser.add_argument("--raw_text_dir", type=str, required=True,
-                        help="The input data directory.")
+                        help="The input data directory (encoded text).")
     parser.add_argument("--data_has_offset_information", action='store_true',
-                        help="The input data directory.")
+                        help="Whether data has offset information.")
     parser.add_argument("--output_dir", type=str, required=True,
-                        help="The output data directory.")
+                        help="The output data directory (labeled bio).")
+    parser.add_argument("--output_dir_brat", type=str,  default=None,
+                        help="The output data directory (brat). Default: output_dir.parent / 'output_dir.stem'_formatted_output")
     parser.add_argument("--do_lower_case", action='store_true',
                         help="Set this flag if you are using an uncased model.")
     parser.add_argument("--eval_batch_size", default=8, type=int,
