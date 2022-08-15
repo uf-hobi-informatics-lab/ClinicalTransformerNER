@@ -190,8 +190,7 @@ def tag2entity(sents):
 
     return entities
 
-
-def bio2output(text_dir, input_dir, output_dir, output_template, do_copy_text, file_suffix='ann'):
+def bio2output(text_dir, input_dir, output_dir, output_template, do_copy_text, file_suffix='ann', labeled_bio_tup_lst={}, use_bio=True):
     """
     we expect the input as a directory of all bio files end with .txt suffix
     we expect the each bio file contain the offset info (start; end position of each words) and tag info;
@@ -200,13 +199,18 @@ def bio2output(text_dir, input_dir, output_dir, output_template, do_copy_text, f
     the output directory will not contain the .txt file
     """
     t_input, p_input, p_output = __prepare_path(text_dir, input_dir, output_dir)
-    for ifn in p_input.glob("*.txt"):
+    for ifn in (p_input.glob("*.txt") if use_bio else labeled_bio_tup_lst.keys()):
         try:
-            ifn_stem = ifn.stem.split(".")[0]
+            ifn_stem = (ifn.stem if use_bio else ifn).split(".")[0]
             doc_text_file = t_input / "{}.txt".format(ifn_stem)
             ofn = p_output / "{}.{}".format(ifn_stem, file_suffix)
-            sents = load_bio_file_into_sents(ifn, do_lower=False)
-            doc_text = read_from_file(doc_text_file)
+            sents = labeled_bio_tup_lst.get(ifn,{}).get('sents', None)
+            sents = sents if sents is not None else load_bio_file_into_sents(ifn, do_lower=False)
+            doc_text = labeled_bio_tup_lst.get(ifn,{}).get('raw_text', None)
+            doc_text = doc_text if doc_text is not None else read_from_file(doc_text_file)
+            if len(sents[0][0][0]) == 0: 
+                # not len(''.join(sum(sum(sents,[]),[]))):
+                continue
             entities = tag2entity(sents)
             output_entities = []
             for idx, entity in enumerate(entities):
@@ -245,10 +249,10 @@ def bio2output(text_dir, input_dir, output_dir, output_template, do_copy_text, f
             traceback.print_exc()
 
 
-def main(text_dir=None, input_bio_dir=None, output_dir=None, formatter=1, do_copy_text=True):
+def main(text_dir=None, input_bio_dir=None, output_dir=None, formatter=1, do_copy_text=True, labeled_bio_tup_lst={}, use_bio=True):
     if formatter == 1:
-        bio2output(text_dir, input_bio_dir, output_dir, BRAT_TEMPLATE, do_copy_text, file_suffix="ann")
+        bio2output(text_dir, input_bio_dir, output_dir, BRAT_TEMPLATE, do_copy_text, file_suffix="ann", labeled_bio_tup_lst=labeled_bio_tup_lst, use_bio=use_bio)
     elif formatter == 2:
-        bio2output(text_dir, input_bio_dir, output_dir, BIOC_TEMPLATE, do_copy_text, file_suffix='xml')
+        bio2output(text_dir, input_bio_dir, output_dir, BIOC_TEMPLATE, do_copy_text, file_suffix='xml', labeled_bio_tup_lst=labeled_bio_tup_lst, use_bio=use_bio)
     else:
         raise RuntimeError("Only support formatter as 1 and 2 but get {}; see help for more information.".format(formatter))

@@ -9,7 +9,7 @@ import argparse
 import os
 import traceback
 from pathlib import Path
-
+from collections import defaultdict
 import torch
 import transformers
 from packaging import version
@@ -54,19 +54,25 @@ def main(args):
         ner_data_processor.offset_info_available()
 
     # fids = [each.stem.split(".")[0] for each in Path(args.preprocessed_text_dir).glob("*.txt")]
-    for each_file in Path(args.preprocessed_text_dir).glob("*.txt"):
+    labeled_bio_tup_lst = defaultdict(dict)
         try:
-            test_example = ner_data_processor.get_test_examples(file_name=each_file.name)
+            test_example = ner_data_processor.get_test_examples(file_name=each_file.name, use_bio=args.use_bio) #[(nsent, offsets, labels)]
             test_features = transformer_convert_data_to_features(args=args,
                                                                  input_examples=test_example,
                                                                  label2idx=label2idx,
                                                                  tokenizer=tokenizer,
                                                                  max_seq_len=args.max_seq_length)
             predictions = predict(args, model, test_features)
+            
+            if args.use_bio:
             Path(args.output_dir).mkdir(parents=True, exist_ok=True)
             ofn = each_file.stem.split(".")[0] + ".bio.txt"
             args.predict_output_file = os.path.join(args.output_dir, ofn)
             _output_bio(args, test_example, predictions)
+            else:
+                labeled_bio_tup_lst[each_file.name]['sents'] = _output_bio(args, test_example, predictions, save_bio=False)
+                with open(each_file, "r") as f:
+                    labeled_bio_tup_lst[each_file.name]['raw_text'] = f.read()
         except Exception as ex:
             args.logger.error(f"Encountered an error when processing predictions for file: {each_file.name}")
             args.logger.error(traceback.format_exc())
@@ -76,11 +82,12 @@ def main(args):
         output_formatted_dir = base_path.parent / f"{base_path.stem}_formatted_output"
         output_formatted_dir.mkdir(parents=True, exist_ok=True)
         format_converter(text_dir=args.raw_text_dir,
-                         input_bio_dir=args.output_dir,
+                         input_bio_dir=(args.output_dir if args.use_bio else args.raw_text_dir),
                          output_dir=output_formatted_dir,
                          formatter=args.do_format,
-                         do_copy_text=args.do_copy)
-
+                         do_copy_text=args.do_copy,
+                         labeled_bio_tup_lst=labeled_bio_tup_lst,
+                         use_bio=args.use_bio)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -113,6 +120,8 @@ if __name__ == '__main__':
                         help="if copy the original plain text to output folder")
     parser.add_argument("--progress_bar", action='store_true',
                         help="show progress during the training in tqdm")
+    parser.add_argument("--use_bio", action='store_true', default=False,
+                        help="whether to use orignial text as input")
 
     global_args = parser.parse_args()
     # create logger

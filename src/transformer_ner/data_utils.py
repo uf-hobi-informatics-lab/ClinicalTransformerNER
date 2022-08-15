@@ -12,7 +12,7 @@ from transformers import (AlbertTokenizer, BartTokenizer, BertTokenizer,
                           DebertaTokenizer, DistilBertTokenizer,
                           ElectraTokenizer, LongformerTokenizer,
                           RobertaTokenizer, XLNetTokenizer, DebertaV2Tokenizer)
-
+from NLPreprocessing.annotation2BIO import pre_processing, generate_BIO
 NEXT_TOKEN = "[next]"
 NEXT_GUARD = -2
 
@@ -66,9 +66,9 @@ class TransformerNerDataProcessor(object):
         data, _ = self._read_data(input_file_name, task='train')
         return self._create_examples(data, 'dev')
 
-    def get_test_examples(self, file_name=None):
+    def get_test_examples(self, file_name=None, use_bio=True):
         input_file_name = self.data_dir / file_name if file_name else self.data_dir / "test.txt"
-        data, _ = self._read_data(input_file_name, task='test')
+        data, _ = self._read_data(input_file_name, task='test', use_bio=use_bio)
         return self._create_examples(data, 'test')
 
     def get_labels(self, default='bert', customized_label2idx=None):
@@ -114,28 +114,24 @@ Otherwise will cause prediction error.''')
             examples.append(InputExample(guide=guide, text=sentence, label=label, offsets=offsets))
         return examples
 
-    def _read_data(self, file_name, task='train'):
+    def _read_data(self, file_name, task='train', use_bio=True):
         """
             data file should be formatted as standard BIO or BIES
             loading train and dev using task='train' where label will be load as well
             loading test using task='test' where all labels will be 'O'
+            
+            Input:
+            
+            file_name (Path): full file path
+            task (str): 'train' or 'test'
+            use_bio (bool): True if file_name is a bio file, False if file_name is normalized text
         """
         assert task in {'train', 'test'}, 'task shoud be either train or test but got {}'.format(task)
-        with open(file_name, "r") as f:
-            txt = f.read().strip()
 
-            if len(txt) < 1:
-                warnings.warn(f"{file_name} is an empty file.")
-                return [], set()
-
-            nsents, unique_labels = [], set()
-            sents = txt.split("\n\n")
-
-            for i, sent in enumerate(sents):
+        def word_to_samples(words, unique_labels, splited=False):
                 nsent, offsets, labels = [], [], []
-                words = sent.split("\n")
                 for j, word in enumerate(words):
-                    word_info = word.split(" ")
+                word_info = word.split(" ") if not splited else word
                     if len(word_info) < 2:
                         warnings.warn("""
                         The word at [line: {} pos: {}] has no position or label information.
@@ -166,7 +162,33 @@ Otherwise will cause prediction error.''')
                         labels.append(word_info[-1])
                     else:
                         labels.append("O")
-                nsents.append((nsent, offsets, labels))
+            return (nsent, offsets, labels)
+        
+        if not use_bio:
+            nsents = []
+            txt, sents = pre_processing(file_name, deid_pattern="\[\*\*|\*\*\]")
+            sents, _ = generate_BIO(sents, [], no_overlap=False)
+            nsents, unique_labels = [], set()
+            for sent in sents:
+                words = [list(map(str, sum(list(map(lambda x: list(x) if (isinstance(x, list) or isinstance(x, tuple)) else [x], word)),[]))) for word in sent]
+                out_tup = word_to_samples(words, unique_labels, splited=True)
+                nsents.append(out_tup)
+                
+        else:
+            with open(file_name, "r") as f:
+                txt = f.read().strip()
+
+                if len(txt) < 1:
+                    warnings.warn(f"{file_name} is an empty file.")
+                    return [], set()
+
+                nsents, unique_labels = [], set()
+                sents = txt.split("\n\n")
+
+                for i, sent in enumerate(sents):
+                    words = sent.split("\n")
+                    out_tup = word_to_samples(words, unique_labels)
+                    nsents.append(out_tup)
 
         return nsents, unique_labels
 
