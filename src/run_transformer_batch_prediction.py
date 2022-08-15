@@ -48,12 +48,12 @@ def main(args):
     if hasattr(args,"model"):
         model = args.model
     else:
-    config = model_config.from_pretrained(args.pretrained_model, do_lower_case=args.do_lower_case)
-    args.config = config
-    args.use_crf = config.use_crf
+        config = model_config.from_pretrained(args.pretrained_model, do_lower_case=args.do_lower_case)
+        args.config = config
+        args.use_crf = config.use_crf
 
-    model = load_model(args, args.pretrained_model)
-    model.to(args.device)
+        model = load_model(args, args.pretrained_model)
+        model.to(args.device)
 
     ner_data_processor = TransformerNerDataProcessor()
     ner_data_processor.set_logger(args.logger)
@@ -69,17 +69,17 @@ def main(args):
         try:
             test_example = ner_data_processor.get_test_examples(file_name=each_file.name, use_bio=args.use_bio) #[(nsent, offsets, labels)]
             test_features = transformer_convert_data_to_features(args=args,
-                                                                 input_examples=test_example,
-                                                                 label2idx=label2idx,
-                                                                 tokenizer=tokenizer,
-                                                                 max_seq_len=args.max_seq_length)
+                                                                    input_examples=test_example,
+                                                                    label2idx=label2idx,
+                                                                    tokenizer=tokenizer,
+                                                                    max_seq_len=args.max_seq_length)
             predictions = predict(args, model, test_features)
             
             if args.use_bio:
-            Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-            ofn = each_file.stem.split(".")[0] + ".bio.txt"
-            args.predict_output_file = os.path.join(args.output_dir, ofn)
-            _output_bio(args, test_example, predictions)
+                Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+                ofn = each_file.stem.split(".")[0] + ".bio.txt"
+                args.predict_output_file = os.path.join(args.output_dir, ofn)
+                _output_bio(args, test_example, predictions)
             else:
                 labeled_bio_tup_lst[each_file.name]['sents'] = _output_bio(args, test_example, predictions, save_bio=False)
                 with open(each_file, "r") as f:
@@ -174,14 +174,14 @@ if __name__ == '__main__':
     global_args = argparser()
     
     if global_args.gpu_nodes is None:
-    # create logger
-    logger = TransformerNERLogger(global_args.log_file, global_args.log_lvl).get_logger()
-    global_args.logger = logger
-    # device
-    global_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info("Task will use cuda device: GPU_{}.".format(torch.cuda.current_device())
-                if torch.cuda.device_count() else 'Task will use CPU.')
+        # create logger
+        logger = TransformerNERLogger(global_args.log_file, global_args.log_lvl).get_logger()
+        global_args.logger = logger
+        # device
+        global_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        logger.info("Task will use cuda device: GPU_{}.".format(torch.cuda.current_device())
+                    if torch.cuda.device_count() else 'Task will use CPU.')
 
-    main(global_args)
+        main(global_args)
     else:
         multiprocessing_wrapper(global_args)
