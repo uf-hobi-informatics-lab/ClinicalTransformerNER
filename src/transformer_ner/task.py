@@ -501,7 +501,7 @@ def predict(args, model, features):
     return fixed_preds
 
 
-def _output_bio(args, tests, preds):
+def _output_bio(args, tests, preds, save_bio=True):
     new_sents = []
     assert len(tests) == len(preds), "Expect {} sents but get {} sents in prediction".format(len(tests), len(preds))
     for example, predicted_labels in zip(tests, preds):
@@ -515,11 +515,14 @@ def _output_bio(args, tests, preds):
         else:
             new_sent = [(tk, lb) for tk, lb in zip(tokens, predicted_labels)]
         new_sents.append(new_sent)
-
-    output_bio(new_sents, args.predict_output_file)
-    args.logger.warning("""The output file is {}, we recommend to use suffix as .bio.txt or .txt. 
-            You can directly use formatter coverter tool in this package.""".format(
-        args.predict_output_file))
+    if save_bio:
+        output_bio(new_sents, args.predict_output_file)
+        args.logger.warning("""The output file is {}, we recommend to use suffix as .bio.txt or .txt. 
+                You can directly use formatter coverter tool in this package.""".format(
+            args.predict_output_file))
+        return None
+    else:
+        return new_sents
 
 
 def set_up_eval_tool(args):
