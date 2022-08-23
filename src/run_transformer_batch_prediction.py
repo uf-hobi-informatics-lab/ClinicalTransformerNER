@@ -15,6 +15,8 @@ import torch.multiprocessing as mp
 import transformers
 from packaging import version
 
+sys.path.append(str(Path( __file__ ).parent.absolute()))
+
 from common_utils.common_io import json_load, output_bio
 from common_utils.common_log import LOG_LVLs
 from common_utils.output_format_converter import main as format_converter
@@ -34,6 +36,15 @@ def check_sample(idx, args):
     else:
         return True
 
+def add_subdir_to_path(p,subdir):
+    _p = Path(p)
+    if subdir is not None:
+        print(str(_p.parent / subdir / _p.name))
+        return str(_p.parent / subdir / _p.name)
+    else:
+        print(str(_p))
+        return str(_p)
+    
 def main(args):
     label2idx = json_load(os.path.join(args.pretrained_model, "label2idx.json"))
     idx2label = {v: k for k, v in label2idx.items()}
@@ -57,47 +68,54 @@ def main(args):
 
     ner_data_processor = TransformerNerDataProcessor()
     ner_data_processor.set_logger(args.logger)
-    ner_data_processor.set_data_dir(args.preprocessed_text_dir)
     if args.data_has_offset_information:
         ner_data_processor.offset_info_available()
 
-    # fids = [each.stem.split(".")[0] for each in Path(args.preprocessed_text_dir).glob("*.txt")]
-    labeled_bio_tup_lst = defaultdict(dict)
-    for i, each_file in enumerate(Path(args.preprocessed_text_dir).glob("*.txt")):
-        if not check_sample(i, args):
-            continue
-        try:
-            test_example = ner_data_processor.get_test_examples(file_name=each_file.name, use_bio=args.use_bio) #[(nsent, offsets, labels)]
-            test_features = transformer_convert_data_to_features(args=args,
-                                                                    input_examples=test_example,
-                                                                    label2idx=label2idx,
-                                                                    tokenizer=tokenizer,
-                                                                    max_seq_len=args.max_seq_length)
-            predictions = predict(args, model, test_features)
-            
-            if args.use_bio:
-                Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-                ofn = each_file.stem.split(".")[0] + ".bio.txt"
-                args.predict_output_file = os.path.join(args.output_dir, ofn)
-                _output_bio(args, test_example, predictions)
-            else:
-                labeled_bio_tup_lst[each_file.name]['sents'] = _output_bio(args, test_example, predictions, save_bio=False)
-                with open(each_file, "r") as f:
-                    labeled_bio_tup_lst[each_file.name]['raw_text'] = f.read()
-        except Exception as ex:
-            args.logger.error(f"Encountered an error when processing predictions for file: {each_file.name}")
-            args.logger.error(traceback.format_exc())
+    for subdir in args.subdirs:
+        _args = copy.deepcopy(args)
+        _args.preprocessed_text_dir = add_subdir_to_path(_args.preprocessed_text_dir,subdir)
+        _args.output_dir_brat       = add_subdir_to_path(_args.output_dir_brat,subdir)
+        _args.output_dir            = add_subdir_to_path(_args.output_dir,subdir)
+        _args.raw_text_dir          = add_subdir_to_path(_args.raw_text_dir,subdir)
 
-    if args.do_format:
-        output_formatted_dir = Path(args.output_dir_brat) if args.output_dir_brat else Path(args.output_dir).parent / "{}_formatted_output".format(Path(args.output_dir).stem)  
-        output_formatted_dir.mkdir(parents=True, exist_ok=True)
-        format_converter(text_dir=args.raw_text_dir,
-                         input_bio_dir=(args.output_dir if args.use_bio else args.raw_text_dir),
-                         output_dir=output_formatted_dir,
-                         formatter=args.do_format,
-                         do_copy_text=args.do_copy,
-                         labeled_bio_tup_lst=labeled_bio_tup_lst,
-                         use_bio=args.use_bio)
+        ner_data_processor.set_data_dir(_args.preprocessed_text_dir)
+        # fids = [each.stem.split(".")[0] for each in Path(args.preprocessed_text_dir).glob("*.txt")]
+        labeled_bio_tup_lst = defaultdict(dict)
+        for i, each_file in enumerate(Path(_args.preprocessed_text_dir).glob("*.txt")):
+            if not check_sample(i, _args):
+                continue
+            try:
+                test_example = ner_data_processor.get_test_examples(file_name=each_file.name, use_bio=_args.use_bio) #[(nsent, offsets, labels)]
+                test_features = transformer_convert_data_to_features(args=_args,
+                                                                        input_examples=test_example,
+                                                                        label2idx=label2idx,
+                                                                        tokenizer=tokenizer,
+                                                                        max_seq_len=_args.max_seq_length)
+                predictions = predict(_args, model, test_features)
+                
+                if _args.use_bio:
+                    Path(_args.output_dir).mkdir(parents=True, exist_ok=True)
+                    ofn = each_file.stem.split(".")[0] + ".bio.txt"
+                    _args.predict_output_file = os.path.join(_args.output_dir, ofn)
+                    _output_bio(_args, test_example, predictions)
+                else:
+                    labeled_bio_tup_lst[each_file.name]['sents'] = _output_bio(_args, test_example, predictions, save_bio=False)
+                    with open(each_file, "r") as f:
+                        labeled_bio_tup_lst[each_file.name]['raw_text'] = f.read()
+            except Exception as ex:
+                args.logger.error(f"Encountered an error when processing predictions for file: {each_file.name}")
+                args.logger.error(traceback.format_exc())
+
+        if _args.do_format:
+            output_formatted_dir = Path(_args.output_dir_brat) if _args.output_dir_brat else Path(_args.output_dir).parent / "{}_formatted_output".format(Path(_args.output_dir).stem)  
+            output_formatted_dir.mkdir(parents=True, exist_ok=True)
+            format_converter(text_dir=_args.raw_text_dir,
+                            input_bio_dir=(_args.output_dir if _args.use_bio else _args.raw_text_dir),
+                            output_dir=output_formatted_dir,
+                            formatter=_args.do_format,
+                            do_copy_text=_args.do_copy,
+                            labeled_bio_tup_lst=labeled_bio_tup_lst,
+                            use_bio=_args.use_bio)
 
 def argparser(args=None):
     parser = argparse.ArgumentParser()
@@ -107,7 +125,7 @@ def argparser(args=None):
     parser.add_argument("--pretrained_model", type=str, required=True,
                         help="The pretrained model file or directory for fine tuning.")
     parser.add_argument("--preprocessed_text_dir", type=str, required=True,
-                        help="The input data directory (bio with dummy label).")
+                        help="The input data directory (bio with (dummy) label).")
     parser.add_argument("--raw_text_dir", type=str, required=True,
                         help="The input data directory (encoded text).")
     parser.add_argument("--data_has_offset_information", action='store_true',
@@ -132,16 +150,18 @@ def argparser(args=None):
                         help="if copy the original plain text to output folder")
     parser.add_argument("--progress_bar", action='store_true',
                         help="show progress during the training in tqdm")
-    parser.add_argument("--use_bio", action='store_true', default=False,
+    parser.add_argument("--no_bio", action='store_true', default=False,
                         help="whether to use orignial text as input")
     parser.add_argument("--gpu_nodes", nargs="+", default=None,
                         help="use multiple gpu nodes")
     
     if args is None:
-        return parser.parse_args()
+        parsed_args = parser.parse_args()
     else:
-        return parser.parse_args(args)
-
+        parsed_args = parser.parse_args(args)
+        
+    parsed_args.use_bio = not parsed_args.no_bio
+    return parsed_args
 
 def multiprocessing_wrapper(args):
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
@@ -166,7 +186,6 @@ def multiprocessing_wrapper(args):
         _args.process_idx = i
         args_lst.append(_args)
 
-    mp.set_start_method('spawn')
     with mp.Pool(N_gpus) as p:
         p.map(main, args_lst)
 
