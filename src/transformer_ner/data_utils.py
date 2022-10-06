@@ -68,9 +68,9 @@ class TransformerNerDataProcessor(object):
         data, _ = self._read_data(input_file_name, task='train')
         return self._create_examples(data, 'dev')
 
-    def get_test_examples(self, file_name=None, use_bio=True):
+    def get_test_examples(self, file_name=None, use_bio=True, sents=None):
         input_file_name = self.data_dir / file_name if file_name else self.data_dir / "test.txt"
-        data, _ = self._read_data(input_file_name, task='test', use_bio=use_bio)
+        data, _ = self._read_data(input_file_name, task='test', use_bio=use_bio, sents=sents)
         return self._create_examples(data, 'test')
 
     def get_labels(self, default='bert', customized_label2idx=None):
@@ -116,7 +116,7 @@ Otherwise will cause prediction error.''')
             examples.append(InputExample(guide=guide, text=sentence, label=label, offsets=offsets))
         return examples
 
-    def _read_data(self, file_name, task='train', use_bio=True):
+    def _read_data(self, file_name, task='train', use_bio=True, sents=None):
         """
             data file should be formatted as standard BIO or BIES
             loading train and dev using task='train' where label will be load as well
@@ -167,9 +167,10 @@ Otherwise will cause prediction error.''')
             return (nsent, offsets, labels)
         
         if not use_bio:
-            nsents = []
-            txt, sents = pre_processing(file_name, deid_pattern="\[\*\*|\*\*\]", sent_tokenizer=self.sent_tokenizer)
-            sents, _ = generate_BIO(sents, [], no_overlap=False)
+            if sents is None:
+                nsents = []
+                txt, sents = pre_processing(file_name, deid_pattern="\[\*\*|\*\*\]", sent_tokenizer=self.sent_tokenizer)
+                sents, _ = generate_BIO(sents, [], no_overlap=False)
             nsents, unique_labels = [], set()
             for sent in sents:
                 words = [list(map(str, sum(list(map(lambda x: list(x) if (isinstance(x, list) or isinstance(x, tuple)) else [x], word)),[]))) for word in sent]

@@ -155,10 +155,9 @@ def __prepare_path(text_dir, input_dir, output_dir):
 
 def tag2entity(sents):
     entities = []
-    for i, sent in enumerate(sents):
+    for sent in sents:
         term, start, end, sem_tag, prev_tag = [], None, None, None, "O"
-        for j, word in enumerate(sent):
-            text, w_s, w_e, w_a_s, w_a_e, predict_tag = word  # must have offset information
+        for text, w_s, w_e, w_a_s, w_a_e, predict_tag in sent:
             if predict_tag == "O":
                 if prev_tag != "O":
                     entities.append((" ".join(term), start, end, sem_tag))
@@ -190,7 +189,7 @@ def tag2entity(sents):
 
     return entities
 
-def bio2output(text_dir, input_dir, output_dir, output_template, do_copy_text, file_suffix='ann', labeled_bio_tup_lst={}, use_bio=True):
+def bio2output(text_dir, input_dir, output_dir, output_template, do_copy_text, file_suffix='ann', labeled_bio_tup_lst={}, use_bio=True, write_output=True, return_dict=False):
     """
     we expect the input as a directory of all bio files end with .txt suffix
     we expect the each bio file contain the offset info (start; end position of each words) and tag info;
@@ -199,6 +198,7 @@ def bio2output(text_dir, input_dir, output_dir, output_template, do_copy_text, f
     the output directory will not contain the .txt file
     """
     t_input, p_input, p_output = __prepare_path(text_dir, input_dir, output_dir)
+    output_dict = dict()
     for ifn in (p_input.glob("*.txt") if use_bio else labeled_bio_tup_lst.keys()):
         try:
             ifn_stem = (ifn.stem if use_bio else ifn).split(".")[0]
@@ -235,19 +235,25 @@ def bio2output(text_dir, input_dir, output_dir, output_template, do_copy_text, f
 
                 output_entities.append(formatted_output)
 
+            if return_dict:
+                output_dict[ifn] = output_entities
+                
             if do_copy_text:
                 new_text_file = p_output / "{}.txt".format(ifn_stem)
                 shutil.copy2(doc_text_file.as_posix(), new_text_file.as_posix())
 
-            with open(ofn, "w") as f:
-                formatted_output = "\n".join(output_entities)
-                if file_suffix == "xml":
-                    formatted_output = BIOC_HEADER.format(ifn.stem) + formatted_output + BIOC_END
-                f.write(formatted_output)
-                f.write("\n")
+            if write_output:
+                with open(ofn, "w") as f:
+                    formatted_output = "\n".join(output_entities)
+                    if file_suffix == "xml":
+                        formatted_output = BIOC_HEADER.format(ifn.stem) + formatted_output + BIOC_END
+                    f.write(formatted_output)
+                    f.write("\n")
         except Exception as ex:
             traceback.print_exc()
-
+            
+    if return_dict:
+        return output_dict
 
 def main(text_dir=None, input_bio_dir=None, output_dir=None, formatter=1, do_copy_text=True, labeled_bio_tup_lst={}, use_bio=True):
     if formatter == 1:
