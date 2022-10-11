@@ -4,7 +4,7 @@
 import logging
 from pathlib import Path
 
-from common_utils.common_log import create_logger
+from ..common_utils.common_log import create_logger
 
 
 class TransformerNERLogger:

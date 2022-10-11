@@ -13,7 +13,7 @@ import traceback
 from pathlib import Path
 from collections import defaultdict
 
-from common_utils.common_io import load_bio_file_into_sents, read_from_file, json_load, pkl_load, write_to_file
+from ..common_utils.common_io import load_bio_file_into_sents, read_from_file, json_load, pkl_load, write_to_file
 
 BRAT_TEMPLATE = "{}\t{} {} {}\t{}"
 BIOC_TEMPLATE = """
@@ -189,7 +189,7 @@ def tag2entity(sents):
 
     return entities
 
-def bio2output(text_dir, input_dir, output_dir, output_template, do_copy_text, file_suffix='ann', labeled_bio_tup_lst={}, use_bio=True, write_output=True, return_dict=False):
+def bio2output(text_dir, input_dir, output_dir, output_template, do_copy_text, file_suffix='ann', labeled_bio_tup_lst={}, use_bio=True, write_output=True, return_dict=None):
     """
     we expect the input as a directory of all bio files end with .txt suffix
     we expect the each bio file contain the offset info (start; end position of each words) and tag info;
@@ -235,8 +235,8 @@ def bio2output(text_dir, input_dir, output_dir, output_template, do_copy_text, f
 
                 output_entities.append(formatted_output)
 
-            if return_dict:
-                output_dict[ifn] = output_entities
+            if return_dict is not None:
+                return_dict[ifn] = [('T{}'.format(i+1),x[0],int(x[1]),int(x[2]),x[3]) for i, x in enumerate(entities)]
                 
             if do_copy_text:
                 new_text_file = p_output / "{}.txt".format(ifn_stem)
@@ -251,9 +251,6 @@ def bio2output(text_dir, input_dir, output_dir, output_template, do_copy_text, f
                     f.write("\n")
         except Exception as ex:
             traceback.print_exc()
-            
-    if return_dict:
-        return output_dict
 
 def main(text_dir=None, input_bio_dir=None, output_dir=None, formatter=1, do_copy_text=True, labeled_bio_tup_lst={}, use_bio=True):
     if formatter == 1:

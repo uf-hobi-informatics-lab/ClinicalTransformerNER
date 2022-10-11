@@ -17,20 +17,20 @@ from packaging import version
 
 sys.path.append(str(Path( __file__ ).parent.absolute()))
 
-from common_utils.common_io import json_load, output_bio
-from common_utils.common_log import LOG_LVLs
-from common_utils.output_format_converter import main as format_converter
-from transformer_ner.data_utils import (TransformerNerDataProcessor,
+from .common_utils.common_io import json_load, output_bio
+from .common_utils.common_log import LOG_LVLs
+from .common_utils.output_format_converter import main as format_converter
+from .transformer_ner.data_utils import (TransformerNerDataProcessor,
                                         transformer_convert_data_to_features)
-from transformer_ner.task import (MODEL_CLASSES, _output_bio, load_model,
+from .transformer_ner.task import (MODEL_CLASSES, _output_bio, load_model,
                                   predict)
-from transformer_ner.transfomer_log import TransformerNERLogger
+from .transformer_ner.transfomer_log import TransformerNERLogger
 
 pytorch_version = version.parse(transformers.__version__)
 assert pytorch_version >= version.parse('3.0.0'), \
     'we now only support transformers version >=3.0.0, but your version is {}'.format(pytorch_version)
     
-def main(args, return_labeled_bio=False):
+def main(args, return_labeled_bio=False, sents={}, raw_text={}):
     label2idx = json_load(os.path.join(args.pretrained_model, "label2idx.json"))
     idx2label = {v: k for k, v in label2idx.items()}
     args.label2idx = label2idx
