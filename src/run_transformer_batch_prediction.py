@@ -61,7 +61,7 @@ def main(args, return_labeled_bio=False, sents={}, raw_text={}):
     labeled_bio_tup_lst = defaultdict(dict)
     for each_file in (Path(args.preprocessed_text_dir).glob("*.txt") if not hasattr(args, "batch_files") else args.batch_files):
         try:
-            test_example = ner_data_processor.get_test_examples(file_name=each_file.name, use_bio=args.use_bio, sents=args.sents) #[(nsent, offsets, labels)]
+            test_example = ner_data_processor.get_test_examples(file_name=each_file.name, use_bio=args.use_bio, sents=sents.get(each_file.stem, None)) #[(nsent, offsets, labels)]
             test_features = transformer_convert_data_to_features(args=args,
                                                                     input_examples=test_example,
                                                                     label2idx=label2idx,
@@ -75,12 +75,12 @@ def main(args, return_labeled_bio=False, sents={}, raw_text={}):
                 args.predict_output_file = os.path.join(args.output_dir, ofn)
                 _output_bio(args, test_example, predictions)
             else:
-                labeled_bio_tup_lst[each_file.name]['sents'] = _output_bio(args, test_example, predictions, save_bio=False)
-                if args.sents.get(each_file.stem, False):
-                    labeled_bio_tup_lst[each_file.name]['raw_text'] = args.sents[each_file.stem]
+                labeled_bio_tup_lst[each_file.stem]['sents'] = _output_bio(args, test_example, predictions, save_bio=False)
+                if raw_text.get(each_file.stem, False):
+                    labeled_bio_tup_lst[each_file.stem]['raw_text'] = raw_text[each_file.stem]
                 else:
                     with open(each_file, "r") as f:
-                        labeled_bio_tup_lst[each_file.name]['raw_text'] = f.read()
+                        labeled_bio_tup_lst[each_file.stem]['raw_text'] = f.read()
         except Exception as ex:
             args.logger.error(f"Encountered an error when processing predictions for file: {each_file.name}")
             args.logger.error(traceback.format_exc())
