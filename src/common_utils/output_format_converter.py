@@ -144,11 +144,12 @@ def biaffine2brat(raw_text_dir, biaffine_output_file, mapping_file, formatted_ou
             shutil.copyfile(fn,  p_output/fn.name)
 
 
-def __prepare_path(text_dir, input_dir, output_dir):
+def __prepare_path(text_dir, input_dir, output_dir, write_output):
     t_input = Path(text_dir)
     p_input = Path(input_dir)
     p_output = Path(output_dir)
-    p_output.mkdir(parents=True, exist_ok=True)
+    if write_output:
+        p_output.mkdir(parents=True, exist_ok=True)
 
     return t_input, p_input, p_output
 
@@ -197,7 +198,7 @@ def bio2output(text_dir, input_dir, output_dir, output_template, do_copy_text, f
     convert the bio formatted files to brat formatted .ann file
     the output directory will not contain the .txt file
     """
-    t_input, p_input, p_output = __prepare_path(text_dir, input_dir, output_dir)
+    t_input, p_input, p_output = __prepare_path(text_dir, input_dir, output_dir, write_output)
     output_dict = dict()
     for ifn in (p_input.glob("*.txt") if use_bio else labeled_bio_tup_lst.keys()):
         try:
