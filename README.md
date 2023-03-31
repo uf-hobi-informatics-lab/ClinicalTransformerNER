@@ -15,7 +15,7 @@ The package is the implementation of a transformer based NER system for clinical
 > note: 1. all mimic-pretrained models are based on base transformer architecture (Download is available in the section MIMIC-III pre-trained models); 2. DeBERTa is not support xlarge-v2 due to tokenizer change in original implementation
 
 ## Usage and example (sequence labeling approach)
-- Training and test with BIO 
+- Training and test with BIO-format training and test files, use BERT as an example.
 
 ```shell script
 # set GPU
@@ -48,6 +48,14 @@ python src/run_transformer_ner.py \
       --log_file ./log.txt \
       --progress_bar \
       --early_stop 3
+```
+- Use other models from Huggingface
+You can find a full list of pretrained models provided by HuggingFace from [this link](https://huggingface.co/transformers/v3.3.1/pretrained_models.html) 
+To use the selected models, you need to change ```--model_type bert``` and ```--pretrained_model``` according to the model. 
+### RoBERTa
+```shell script
+      --model_type roberta \
+      --pretrained_model roberta-base \
 ```
 
 - Test on multiple files and convert bio to brat format
