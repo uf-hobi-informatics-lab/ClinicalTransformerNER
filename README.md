@@ -49,13 +49,49 @@ python src/run_transformer_ner.py \
       --progress_bar \
       --early_stop 3
 ```
-- Use other models from Huggingface
+### Use other models from Huggingface
 You can find a full list of pretrained models provided by HuggingFace from [this link](https://huggingface.co/transformers/v3.3.1/pretrained_models.html) 
 To use the selected models, you need to change ```--model_type bert``` and ```--pretrained_model``` according to the model. 
-### RoBERTa
+- RoBERTa
 ```shell script
       --model_type roberta \
       --pretrained_model roberta-base \
+```
+- ALBERT
+```shell script
+      --model_type albert \
+      --pretrained_model albert-base-v1 \
+```
+### Use customized models by HOBI NLP team
+- BERT_MIMIC: Download mimiciii_bert_10e_128b.zip, provided at the bottom of this page, decompress and put the folder under the running path, chagne the following parameters:
+```shell script
+      --model_type albert \
+      --pretrained_model mimiciii-albert_10e_128b \
+```
+- ALBERT_MIMIC: Download the model file provided at the bottom of this page : mimiciii-albert_10e_128b.zip, decompress and put it under the running path, change the following parameters:
+```shell script
+      --model_type albert \
+      --pretrained_model mimiciii-albert_10e_128b \
+```
+- ELECTRA_MIMIC: Download mimiciii_electra_5e_128b.zip and follow the similar procedure described above.
+```shell script
+      --model_type electra \
+      --pretrained_model mimiciii_electra_5e_128b \
+```
+- ROBERTA_MIMIC: Download mimiciii_roberta_10e_128b.zip and follow the similar procedure described above.
+```shell script
+      --model_type roberta \
+      --pretrained_model mimiciii_roberta_10e_128b \
+```
+- DeBERTa_MIMIC: Downlaod mimiciii_deberta_10e_128b.zip and follow the similar procedure described above.
+```shell script
+      --model_type deberta \
+      --pretrained_model  mimiciii_deberta_10e_128b\
+```
+- Longformer: Download mimiciii_longformer_5e_128b.zip and follow the similar procedure described above. 
+```shell script
+      --model_type longformer \
+      --pretrained_model  mimiciii_longformer_5e_128b \
 ```
 
 - Test on multiple files and convert bio to brat format
