@@ -12,6 +12,7 @@ The package is the implementation of a transformer based NER system for clinical
 - XLNet (base, large, mimiciii-pretrained)
 - Longformer (allenai/longformer-base-4096, allenai/longformer-large-4096)
 - DeBERTa (microsoft/deberta-base, microsoft/deberta-large, microsoft/deberta-xlarge)
+- GatorTron (UFNLP/gatortron-base, UFNLP/gatortron-medium, UFNLP/gatortronS)
 > note: 1. all mimic-pretrained models are based on base transformer architecture (Download is available in the section MIMIC-III pre-trained models); 2. DeBERTa is not support xlarge-v2 due to tokenizer change in original implementation
 
 ## Usage and example (sequence labeling approach)
@@ -61,6 +62,12 @@ To use the selected models, you need to change ```--model_type bert``` and ```--
 ```shell script
       --model_type albert \
       --pretrained_model albert-base-v1 \
+```
+
+- GatorTron
+```shell script
+    --model_type gatortron \
+    --pretrained_model UFNLP/gatortron-base
 ```
 ### Use customized models by HOBI NLP team
 - BERT_MIMIC: Download mimiciii_bert_10e_128b.zip, provided at the bottom of this page, decompress and put the folder under the running path, chagne the following parameters:
