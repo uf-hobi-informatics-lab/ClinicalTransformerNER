@@ -24,7 +24,7 @@ from transformers import (ALBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
                           XLNetConfig, XLNetForTokenClassification, XLNetModel,
                           XLNetPreTrainedModel, DebertaV2Model, DebertaV2ForTokenClassification,
                           MegatronBertPreTrainedModel, MegatronBertModel, MegatronBertPreTrainedModel)
-
+from transformers import AutoModel, AutoTokenizer, AutoConfig
 from transformer_ner.model_utils import FocalLoss, _calculate_loss
 from transformer_ner.model_utils import New_Transformer_CRF as Transformer_CRF
 
@@ -604,6 +604,55 @@ class MegatronNerModel(MegatronBertPreTrainedModel):
     """
     model architecture:
       (bert): MegatronBertModel
+      (dropout): Dropout(p=0.1, inplace=False)
+      (classifier): Linear(in_features=768, out_features=12, bias=True)
+      (loss_fct): CrossEntropyLoss()
+      (crf_layer): Transformer_CRF()
+    """
+    def __init__(self, config):
+        super().__init__(config)
+        self.num_labels = config.num_labels
+        self.bert = MegatronBertModel(config)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+
+        if hasattr(config, 'use_focal_loss') and config.use_focal_loss:
+            self.loss_fct = FocalLoss(gamma=config.focal_loss_gamma)
+        else:
+            self.loss_fct = nn.CrossEntropyLoss()
+
+        self.use_crf = config.use_crf if hasattr(config, "use_crf") else None
+        self.crf_layer = Transformer_CRF(config.num_labels) if self.use_crf else None
+
+        self.init_weights()
+
+    def forward(self, input_ids, attention_mask=None, token_type_ids=None,
+                position_ids=None, head_mask=None, label_ids=None):
+        outputs = self.bert(input_ids,
+                            attention_mask=attention_mask,
+                            token_type_ids=token_type_ids,
+                            position_ids=position_ids,
+                            head_mask=head_mask)
+
+        sequence_output = outputs[0]
+        sequence_output = self.dropout(sequence_output)
+        logits = self.classifier(sequence_output)
+
+        if self.use_crf:
+            # logits, active_logits, loss = self.crf_layer(logits, label_ids)
+            loss = self.crf_layer(emissions=logits,
+                                  tags=label_ids,
+                                  mask=torch.tensor(attention_mask, dtype=torch.uint8))
+            active_logits = None
+            logits = None if self.training else self.crf_layer.decode(emissions=logits, mask=None)
+        else:
+            loss, active_logits = _calculate_loss(logits, attention_mask, label_ids, self.loss_fct, self.num_labels)
+
+        return logits, active_logits, loss
+class GatortronNerModel(MegatronBertPreTrainedModel):
+    """
+    model architecture:
+      (bert): GatortronBertModel
       (dropout): Dropout(p=0.1, inplace=False)
       (classifier): Linear(in_features=768, out_features=12, bias=True)
       (loss_fct): CrossEntropyLoss()

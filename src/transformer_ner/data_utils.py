@@ -80,7 +80,7 @@ class TransformerNerDataProcessor(object):
         if default in {'bert', 'megatron', 'roberta', 'albert',
                        'distilbert', 'bart', 'xlnet',
                        'electra', 'deberta', 'longformer',
-                       'deberta-v2'} and not customized_label2idx:
+                       'deberta-v2', 'gatortron'} and not customized_label2idx:
             # we do not need special label for SEP, using O instead
             # label2idx = {'O': 4, 'X': 3, 'PAD': 0, 'CLS': 1, 'SEP': 2}
             label2idx = {'O': 3, 'X': 2, 'PAD': 0, 'CLS': 1}
@@ -390,7 +390,7 @@ def ner_data_loader(dataset, batch_size=2, task='train', auto=False):
 
 
 def batch_to_model_inputs(batch, model_type='bert'):
-    if model_type in {"bert", "megatron", "albert", "distilbert", "xlnet", "electra", 'deberta', 'deberta-v2'}:
+    if model_type in {"bert", "megatron", "albert", "distilbert", "xlnet", "electra", 'deberta', 'deberta-v2', 'gatortron'}:
         inputs = {
             'input_ids': batch[0],
             'attention_mask': batch[1],

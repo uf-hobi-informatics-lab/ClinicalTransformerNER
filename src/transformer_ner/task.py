@@ -45,7 +45,8 @@ from transformer_ner.model import (AlbertNerModel, BartNerModel,
                                    DeBertaNerModel, DistilBertNerModel,
                                    ElectraNerModel, LongformerNerModel,
                                    RobertaNerModel, Transformer_CRF,
-                                   DeBertaV2NerModel, MegatronNerModel)
+                                   DeBertaV2NerModel, MegatronNerModel,
+                                   GatortronNerModel)
 from transformer_ner.model_utils import PGD, FGM, get_linear_schedule_with_warmup
 
 
@@ -60,7 +61,8 @@ MODEL_CLASSES = {
     'longformer': (LongformerConfig, LongformerNerModel, LongformerTokenizer),
     'deberta': (DebertaConfig, DeBertaNerModel, DebertaTokenizer),
     'deberta-v2': (DebertaV2Config, DeBertaV2NerModel, DebertaV2Tokenizer),
-    'megatron': (MegatronBertConfig, MegatronNerModel, BertTokenizer)
+    'megatron': (MegatronBertConfig, MegatronNerModel, BertTokenizer),
+    'gatortron': (MegatronBertConfig, GatortronNerModel, BertTokenizer)
 }
 
 
@@ -101,6 +103,8 @@ def save_only_transformer_core(args, model):
     if model_type == "bert":
         model_core = model.bert
     if model_type == "megatron":
+        model_core = model.bert
+    elif model_type == "gatortron":
         model_core = model.bert
     elif model_type == "roberta":
         model_core = model.roberta
